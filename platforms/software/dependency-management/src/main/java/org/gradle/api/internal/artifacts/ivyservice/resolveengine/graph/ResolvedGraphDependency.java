@@ -28,6 +28,9 @@ import javax.annotation.Nullable;
  */
 public interface ResolvedGraphDependency {
 
+    /**
+     * The component selector that the user requested, before substitutions are applied.
+     */
     ComponentSelector getRequested();
 
     @Nullable
@@ -50,10 +53,13 @@ public interface ResolvedGraphDependency {
     /**
      * Returns the simple id of the source variant, as per {@link ResolvedGraphVariant#getNodeId()}.
      */
-    Long getFromVariant();
+    long getFromVariant();
 
     /**
      * Returns the simple id of the selected variant, as per {@link ResolvedGraphVariant#getNodeId()}.
+     * <p>
+     * If at the end of graph traversal this method returns null, <strong>the graph is broken and a bug
+     * in the dependency resolution has been encountered.</strong>
      */
     @Nullable
     Long getSelectedVariant();

@@ -17,18 +17,22 @@
 package org.gradle.api.publish.internal.mapping;
 
 import org.gradle.api.component.SoftwareComponentVariant;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.publish.internal.versionmapping.VersionMappingStrategyInternal;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 
 /**
  * Creates {@link VariantDependencyResolver} and {@link ComponentDependencyResolver} scoped to a particular variant,
  * taking into account whether dependency mapping or version mapping is enabled.
  */
+@ServiceScope(Scope.Build.class)
 public interface DependencyCoordinateResolverFactory {
 
     /**
      * Create coordinate resolvers for the given variant.
      */
-    DependencyResolvers createCoordinateResolvers(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy);
+    Provider<DependencyResolvers> createCoordinateResolvers(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy);
 
     /**
      * Contains the variant and component coordinate resolver for a given variant.

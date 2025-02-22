@@ -18,6 +18,7 @@ package org.gradle.api.problems
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.problems.internal.PluginIdLocation
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 
 /**
@@ -27,45 +28,6 @@ class InjectedProblemsTransformerIntegrationTest extends AbstractIntegrationSpec
 
     def setup() {
         enableProblemsApiCheck()
-    }
-
-    def "task is going to be implicitly added to the problem"() {
-        given:
-        buildFile """
-            import org.gradle.api.problems.Problem
-            import org.gradle.api.problems.Severity
-            import org.gradle.internal.deprecation.Documentation
-
-            abstract class ProblemReportingTask extends DefaultTask {
-                @Inject
-                protected abstract Problems getProblems();
-
-                @TaskAction
-                void run() {
-                    problems.forNamespace("org.example.plugin").reporting {
-                        it.label("label")
-                        .category("type")
-                    }
-                }
-            }
-
-            tasks.register("reportProblem", ProblemReportingTask)
-            """
-
-        when:
-        run("reportProblem")
-
-        then:
-        collectedProblems.size() == 1
-        def problem = collectedProblems[0]
-
-        def taskPathLocations = problem["locations"].findAll {
-            it["type"] == "task"
-        }
-        taskPathLocations.size() == 1
-
-        def taskPathLocation = taskPathLocations[0]
-        taskPathLocation["buildTreePath"] == ":reportProblem"
     }
 
     def "plugin id is going to be implicitly added to the problem"() {
@@ -78,6 +40,8 @@ class InjectedProblemsTransformerIntegrationTest extends AbstractIntegrationSpec
             import ${Project.name};
             import ${Plugin.name};
             import ${Problems.name};
+            import ${ProblemId.name};
+            import ${ProblemGroup.name};
             import javax.inject.Inject;
 
             public abstract class PluginImpl implements Plugin<Project> {
@@ -86,11 +50,7 @@ class InjectedProblemsTransformerIntegrationTest extends AbstractIntegrationSpec
                 protected abstract Problems getProblems();
 
                 public void apply(Project project) {
-                    getProblems().forNamespace("org.example.plugin").reporting(builder ->
-                        builder
-                            .label("label")
-                            .category("type")
-                    );
+                    getProblems().getReporter().report(ProblemId.create("type", "label", ProblemGroup.create("generic", "Generic")), builder -> {});
                     project.getTasks().register("reportProblem", t -> {
                         t.doLast(t2 -> {
 
@@ -122,15 +82,6 @@ class InjectedProblemsTransformerIntegrationTest extends AbstractIntegrationSpec
         run("reportProblem")
 
         then:
-        collectedProblems.size() == 1
-        def problem = collectedProblems[0]
-
-        def pluginIdLocations = problem["locations"].findAll {
-            it["type"] == "pluginId"
-        }
-        pluginIdLocations.size() == 1
-
-        def pluginIdLocation = pluginIdLocations[0]
-        pluginIdLocation["pluginId"] == "test.plugin"
+        receivedProblem.oneLocation(PluginIdLocation).pluginId == "test.plugin"
     }
 }

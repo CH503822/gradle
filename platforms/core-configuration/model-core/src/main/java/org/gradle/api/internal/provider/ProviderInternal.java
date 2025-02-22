@@ -20,6 +20,7 @@ import org.gradle.api.Transformer;
 import org.gradle.api.internal.tasks.TaskDependencyContainer;
 import org.gradle.api.provider.Provider;
 import org.gradle.internal.DisplayName;
+import org.gradle.internal.evaluation.EvaluationOwner;
 
 import javax.annotation.Nullable;
 import java.util.function.BiFunction;
@@ -37,7 +38,7 @@ import java.util.function.BiFunction;
  *
  * <p>In other words, a provider does not provide a value, it provides a value whose content is in a particular state. This is discussed in more detail below.</p>
  *
- * <h1>The provider value</h1>
+ * <h2>The provider value</h2>
  *
  * <p>The value of a provider may be:</p>
  *
@@ -70,7 +71,7 @@ import java.util.function.BiFunction;
  * fixed once the task has executed. It would become an error to query a provider whose value is still "changing".
  * </p>
  *
- * <h1>The value content</h1>
+ * <h2>The value content</h2>
  *
  * <p>Each provider guarantees that the content of the value is in some particular state when the provider is queried.
  * Currently there are only two states that the various provider implementations can guarantee:
@@ -109,7 +110,7 @@ import java.util.function.BiFunction;
  * <p>There are further optimizations that could be implemented with configuration caching. For example, when a work node has only fixed inputs, the node could be executed prior to writing the work graph to
  * the configuration cache, so that its outputs in turn become fixed. The node can then be discarded from the graph and replaced with its (now fixed) outputs.</p>
  */
-public interface ProviderInternal<T> extends Provider<T>, ValueSupplier, TaskDependencyContainer {
+public interface ProviderInternal<T> extends Provider<T>, ValueSupplier, TaskDependencyContainer, EvaluationOwner {
     /**
      * Return the upper bound on the type of all values that this provider may produce, if known.
      *
@@ -150,6 +151,7 @@ public interface ProviderInternal<T> extends Provider<T>, ValueSupplier, TaskDep
      */
     ExecutionTimeValue<? extends T> calculateExecutionTimeValue();
 
+    @Override
     default <U, R> Provider<R> zip(Provider<U> right, BiFunction<? super T, ? super U, ? extends R> combiner) {
         return new BiProvider<>(null, this, right, combiner);
     }

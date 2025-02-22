@@ -24,7 +24,12 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -67,7 +72,7 @@ public class SampleIncludeProcessor extends IncludeProcessor {
         final List<String> files = Arrays.asList(attributes.get("files").toString().split(";"));
 
         final String sampleContent = getSampleContent(sampleBaseDir, sampleDir, files);
-        reader.push_include(sampleContent, target, target, 1, attributes);
+        reader.pushInclude(sampleContent, target, target, 1, attributes);
     }
 
     private static String getSourceSyntax(String fileName) {
@@ -129,7 +134,7 @@ public class SampleIncludeProcessor extends IncludeProcessor {
 
         StringBuilder result = new StringBuilder(source.length());
 
-        boolean fullSample = tags.isEmpty() || tags.size() == 1 && DOUBLE_WILDCARD_TAG.equals(tags.get(0));
+        boolean fullSample = tags.isEmpty() || (tags.size() == 1 && DOUBLE_WILDCARD_TAG.equals(tags.get(0)));
 
         if (fullSample) {
             // filter out lines matching the tagging regex

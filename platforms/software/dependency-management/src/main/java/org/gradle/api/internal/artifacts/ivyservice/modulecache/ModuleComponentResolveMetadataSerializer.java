@@ -17,12 +17,12 @@
 package org.gradle.api.internal.artifacts.ivyservice.modulecache;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
 import org.gradle.api.internal.artifacts.ImmutableModuleIdentifierFactory;
+import org.gradle.api.internal.artifacts.capability.CapabilitySelectorSerializer;
 import org.gradle.internal.component.external.model.AbstractLazyModuleComponentResolveMetadata;
 import org.gradle.internal.component.external.model.AbstractRealisedModuleComponentResolveMetadata;
 import org.gradle.internal.component.external.model.DefaultVirtualModuleComponentIdentifier;
@@ -41,6 +41,8 @@ import org.gradle.internal.resolve.caching.DesugaringAttributeContainerSerialize
 import org.gradle.internal.serialize.AbstractSerializer;
 import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.Encoder;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -53,6 +55,7 @@ import java.util.Map;
  * This serializer will first transform any {@link  AbstractLazyModuleComponentResolveMetadata lazy} metadata
  * in the {@link AbstractRealisedModuleComponentResolveMetadata realised} version so that the complete state can be serialized.
  */
+@ServiceScope(Scope.Build.class)
 public class ModuleComponentResolveMetadataSerializer extends AbstractSerializer<ModuleComponentResolveMetadata> {
 
     private final RealisedIvyModuleResolveMetadataSerializationHelper ivySerializationHelper;
@@ -60,17 +63,17 @@ public class ModuleComponentResolveMetadataSerializer extends AbstractSerializer
     private final ModuleMetadataSerializer delegate;
     private final ImmutableModuleIdentifierFactory moduleIdentifierFactory;
 
-    public ModuleComponentResolveMetadataSerializer(ModuleMetadataSerializer delegate, DesugaringAttributeContainerSerializer attributeContainerSerializer, ImmutableModuleIdentifierFactory moduleIdentifierFactory) {
+    public ModuleComponentResolveMetadataSerializer(ModuleMetadataSerializer delegate, DesugaringAttributeContainerSerializer attributeContainerSerializer, CapabilitySelectorSerializer capabilitySelectorSerializer, ImmutableModuleIdentifierFactory moduleIdentifierFactory) {
         this.delegate = delegate;
         this.moduleIdentifierFactory = moduleIdentifierFactory;
-        ivySerializationHelper = new RealisedIvyModuleResolveMetadataSerializationHelper(attributeContainerSerializer, moduleIdentifierFactory);
-        mavenSerializationHelper = new RealisedMavenModuleResolveMetadataSerializationHelper(attributeContainerSerializer, moduleIdentifierFactory);
+        ivySerializationHelper = new RealisedIvyModuleResolveMetadataSerializationHelper(attributeContainerSerializer, capabilitySelectorSerializer, moduleIdentifierFactory);
+        mavenSerializationHelper = new RealisedMavenModuleResolveMetadataSerializationHelper(attributeContainerSerializer, capabilitySelectorSerializer, moduleIdentifierFactory);
     }
 
     @Override
     public ModuleComponentResolveMetadata read(Decoder decoder) throws EOFException, Exception {
 
-        Map<Integer, MavenDependencyDescriptor> deduplicationDependencyCache = Maps.newHashMap();
+        Map<Integer, MavenDependencyDescriptor> deduplicationDependencyCache = new HashMap<>();
         MutableModuleComponentResolveMetadata mutable = delegate.read(decoder, moduleIdentifierFactory, deduplicationDependencyCache);
         readPlatformOwners(decoder, mutable);
         AbstractLazyModuleComponentResolveMetadata resolveMetadata = (AbstractLazyModuleComponentResolveMetadata) mutable.asImmutable();
@@ -105,7 +108,7 @@ public class ModuleComponentResolveMetadataSerializer extends AbstractSerializer
     @Override
     public void write(Encoder encoder, ModuleComponentResolveMetadata value) throws Exception {
         AbstractRealisedModuleComponentResolveMetadata transformed = assertRealized(value);
-        HashMap<ExternalDependencyDescriptor, Integer> deduplicationDependencyCache = Maps.newHashMap();
+        HashMap<ExternalDependencyDescriptor, Integer> deduplicationDependencyCache = new HashMap<>();
         delegate.write(encoder, transformed, deduplicationDependencyCache);
         writeOwners(encoder, value.getPlatformOwners());
         if (transformed instanceof RealisedIvyModuleResolveMetadata) {

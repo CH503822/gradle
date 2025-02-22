@@ -71,11 +71,11 @@ public class BuildScriptBuilder {
 
     private final BuildInitDsl dsl;
     private final String fileNameWithoutExtension;
-    private boolean externalComments;
     private final MavenRepositoryURLHandler mavenRepoURLHandler;
     private final BuildContentGenerationContext buildContentGenerationContext;
+    private BuildInitComments comments = BuildInitComments.ON;
 
-    private final List<String> headerLines = new ArrayList<>();
+    private final List<String> headerCommentLines = new ArrayList<>();
     private final TopLevelBlock block;
 
     private final boolean useIncubatingAPIs;
@@ -93,8 +93,8 @@ public class BuildScriptBuilder {
         this.useVersionCatalog = useVersionCatalog;
     }
 
-    public BuildScriptBuilder withExternalComments() {
-        this.externalComments = true;
+    public BuildScriptBuilder withComments(BuildInitComments comments) {
+        this.comments = comments;
         return this;
     }
 
@@ -114,7 +114,7 @@ public class BuildScriptBuilder {
      * Adds a comment to the header of the file.
      */
     public BuildScriptBuilder fileComment(String comment) {
-        headerLines.addAll(splitComment(comment));
+        headerCommentLines.addAll(splitComment(comment));
         return this;
     }
 
@@ -140,8 +140,7 @@ public class BuildScriptBuilder {
      * @param comment A description of why the plugin is required
      */
     public BuildScriptBuilder plugin(@Nullable String comment, String pluginId) {
-        block.plugins.add(new PluginSpec(pluginId, null, comment));
-        return this;
+        return plugin(comment, pluginId, null, null);
     }
 
     /**
@@ -159,10 +158,10 @@ public class BuildScriptBuilder {
      *
      * @param comment A description of why the plugin is required
      */
-    public BuildScriptBuilder plugin(@Nullable String comment, String pluginId, @Nullable String version) {
+    public BuildScriptBuilder plugin(@Nullable String comment, String pluginId, @Nullable String version, @Nullable String pluginAlias) {
         AbstractStatement plugin;
         if (useVersionCatalog && version != null) {
-            String versionCatalogRef = buildContentGenerationContext.getVersionCatalogDependencyRegistry().registerPlugin(pluginId, version);
+            String versionCatalogRef = buildContentGenerationContext.getVersionCatalogDependencyRegistry().registerPlugin(pluginId, version, pluginAlias);
             plugin = new PluginSpec(versionCatalogRef, comment);
         } else {
             plugin = new PluginSpec(pluginId, version, comment);
@@ -343,7 +342,6 @@ public class BuildScriptBuilder {
     /**
      * Adds a top level block statement.
      *
-     *
      * @return The body of the block, to which further statements can be added.
      */
     public ScriptBlockBuilder block(@Nullable String comment, String methodName) {
@@ -363,7 +361,7 @@ public class BuildScriptBuilder {
             t.block(null, "toolchain", t1 -> {
                 t1.propertyAssignment(null, "languageVersion",
                     new MethodInvocationExpression(null, "JavaLanguageVersion.of", singletonList(new LiteralValue(languageVersion.asInt()))),
-                true);
+                    true);
             });
         });
     }
@@ -474,7 +472,6 @@ public class BuildScriptBuilder {
      * Creates an element in the given container.
      *
      * @param varName A variable to use to reference the element, if required by the DSL. If {@code null}, then use the element name.
-     *
      * @return An expression that can be used to refer to the element later in the script.
      */
     public Expression createContainerElement(@Nullable String comment, String container, String elementName, @Nullable String varName) {
@@ -486,14 +483,16 @@ public class BuildScriptBuilder {
     public TemplateOperation create(Directory targetDirectory) {
         return () -> {
             if (useIncubatingAPIs) {
-                headerLines.add(INCUBATING_APIS_WARNING);
+                headerCommentLines.add(INCUBATING_APIS_WARNING);
             }
 
             File target = getTargetFile(targetDirectory);
             GFileUtils.mkdirs(target.getParentFile());
             try (PrintWriter writer = new PrintWriter(new FileWriter(target))) {
-                PrettyPrinter printer = new PrettyPrinter(syntaxFor(dsl), writer, externalComments);
-                printer.printFileHeader(headerLines);
+                PrettyPrinter printer = new PrettyPrinter(syntaxFor(dsl), writer, comments);
+                if (!comments.equals(BuildInitComments.OFF)) {
+                    printer.printFileHeader(headerCommentLines);
+                }
                 block.writeBodyTo(printer);
             } catch (Exception e) {
                 throw new GradleException("Could not generate file " + target + ".", e);
@@ -963,6 +962,7 @@ public class BuildScriptBuilder {
     @NonNullApi
     private static class StatementGroup extends AbstractStatement {
         private final List<Statement> statements = new ArrayList<>();
+
         StatementGroup(@Nullable String comment) {
             super(comment);
         }
@@ -1866,24 +1866,25 @@ public class BuildScriptBuilder {
 
         private final Syntax syntax;
         private final PrintWriter writer;
-        private final boolean externalComments;
+        private final BuildInitComments comments;
         private String indent = "";
         private String eolComment = null;
         private int commentCount = 0;
-        private boolean needSeparatorLine = true;
-        private boolean firstStatementOfBlock = false;
+        private boolean needSeparatorLine = false;
+        private boolean firstStatementOfBlock = true;
         private boolean hasSeparatorLine = false;
 
-        PrettyPrinter(Syntax syntax, PrintWriter writer, boolean externalComments) {
+        PrettyPrinter(Syntax syntax, PrintWriter writer, BuildInitComments comments) {
             this.syntax = syntax;
             this.writer = writer;
-            this.externalComments = externalComments;
+            this.comments = comments;
         }
 
         public void printFileHeader(Collection<String> lines) {
-            if (externalComments) {
+            if (!comments.equals(BuildInitComments.ON)) {
                 return;
             }
+
             println("/*");
             println(" * This file was generated by the Gradle 'init' task.");
             if (!lines.isEmpty()) {
@@ -1897,6 +1898,9 @@ public class BuildScriptBuilder {
                 }
             }
             println(" */");
+
+            firstStatementOfBlock = false;
+            needSeparatorLine = true;
         }
 
         public void printBlock(String blockSelector, BlockBody blockBody) {
@@ -1938,7 +1942,7 @@ public class BuildScriptBuilder {
             boolean hasComment = statement.getComment() != null;
 
             // Add separators before and after anything with a comment or that is a block or group of statements
-            boolean needsSeparator = hasComment || type == Statement.Type.Group;
+            boolean needsSeparator = type == Statement.Type.Group || (hasComment && comments.equals(BuildInitComments.ON));
             if (needsSeparator && !firstStatementOfBlock) {
                 needSeparatorLine = true;
             }
@@ -1946,13 +1950,18 @@ public class BuildScriptBuilder {
             printStatementSeparator();
 
             if (hasComment) {
-                if (externalComments) {
-                    commentCount++;
-                    eolComment = " // <" + commentCount + ">";
-                } else {
-                    for (String line : splitComment(statement.getComment())) {
-                        println("// " + line);
-                    }
+                switch (comments) {
+                    case ON:
+                        for (String line : splitComment(statement.getComment())) {
+                            println("// " + line);
+                        }
+                        break;
+                    case OFF:
+                        break;
+                    case EXTERNAL:
+                        commentCount++;
+                        eolComment = " // <" + commentCount + ">";
+                        break;
                 }
             }
 
@@ -2440,7 +2449,7 @@ public class BuildScriptBuilder {
 
                 final StringWriter result = new StringWriter();
                 try (PrintWriter writer = new PrintWriter(result)) {
-                    PrettyPrinter printer = new PrettyPrinter(syntaxFor(dsl), writer, false);
+                    PrettyPrinter printer = new PrettyPrinter(syntaxFor(dsl), writer, BuildInitComments.OFF);
                     assignment.writeCodeTo(printer);
                     return result.toString();
                 } catch (Exception e) {

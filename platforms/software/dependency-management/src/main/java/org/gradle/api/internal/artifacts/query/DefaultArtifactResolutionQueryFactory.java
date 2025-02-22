@@ -16,45 +16,38 @@
 package org.gradle.api.internal.artifacts.query;
 
 import org.gradle.api.artifacts.query.ArtifactResolutionQuery;
-import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules;
+import org.gradle.api.internal.artifacts.ComponentMetadataProcessorFactory;
 import org.gradle.api.internal.artifacts.RepositoriesSupplier;
-import org.gradle.api.internal.artifacts.configurations.ConfigurationContainerInternal;
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ResolveIvyFactory;
-import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyFactory;
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ExternalModuleComponentResolverFactory;
 import org.gradle.api.internal.component.ComponentTypeRegistry;
-import org.gradle.internal.resolve.caching.ComponentMetadataSupplierRuleExecutor;
+
+import javax.inject.Inject;
 
 public class DefaultArtifactResolutionQueryFactory implements ArtifactResolutionQueryFactory {
-    private final ConfigurationContainerInternal configurationContainer;
+    private final ResolutionStrategyFactory resolutionStrategyFactory;
     private final RepositoriesSupplier repositoriesSupplier;
-    private final ResolveIvyFactory ivyFactory;
-    private final GlobalDependencyResolutionRules metadataHandler;
+    private final ExternalModuleComponentResolverFactory ivyFactory;
+    private final ComponentMetadataProcessorFactory componentMetadataProcessorFactory;
     private final ComponentTypeRegistry componentTypeRegistry;
-    private final ImmutableAttributesFactory attributesFactory;
-    private final ArtifactTypeRegistry artifactTypeRegistry;
-    private final ComponentMetadataSupplierRuleExecutor componentMetadataSupplierRuleExecutor;
 
-    public DefaultArtifactResolutionQueryFactory(ConfigurationContainerInternal configurationContainer,
-                                                 RepositoriesSupplier repositoriesSupplier,
-                                                 ResolveIvyFactory ivyFactory,
-                                                 GlobalDependencyResolutionRules metadataHandler,
-                                                 ComponentTypeRegistry componentTypeRegistry,
-                                                 ImmutableAttributesFactory attributesFactory,
-                                                 ArtifactTypeRegistry artifactTypeRegistry,
-                                                 ComponentMetadataSupplierRuleExecutor componentMetadataSupplierRuleExecutor) {
-        this.configurationContainer = configurationContainer;
+    @Inject
+    public DefaultArtifactResolutionQueryFactory(
+        ResolutionStrategyFactory resolutionStrategyFactory,
+        RepositoriesSupplier repositoriesSupplier,
+        ExternalModuleComponentResolverFactory ivyFactory,
+        ComponentMetadataProcessorFactory componentMetadataProcessorFactory,
+        ComponentTypeRegistry componentTypeRegistry
+    ) {
+        this.resolutionStrategyFactory = resolutionStrategyFactory;
         this.repositoriesSupplier = repositoriesSupplier;
         this.ivyFactory = ivyFactory;
-        this.metadataHandler = metadataHandler;
+        this.componentMetadataProcessorFactory = componentMetadataProcessorFactory;
         this.componentTypeRegistry = componentTypeRegistry;
-        this.attributesFactory = attributesFactory;
-        this.artifactTypeRegistry = artifactTypeRegistry;
-        this.componentMetadataSupplierRuleExecutor = componentMetadataSupplierRuleExecutor;
     }
 
     @Override
     public ArtifactResolutionQuery createArtifactResolutionQuery() {
-        return new DefaultArtifactResolutionQuery(configurationContainer, repositoriesSupplier, ivyFactory, metadataHandler, componentTypeRegistry, attributesFactory, artifactTypeRegistry, componentMetadataSupplierRuleExecutor);
+        return new DefaultArtifactResolutionQuery(resolutionStrategyFactory, repositoriesSupplier, ivyFactory, componentMetadataProcessorFactory, componentTypeRegistry);
     }
 }

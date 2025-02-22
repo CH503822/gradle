@@ -15,7 +15,6 @@
  */
 package org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes;
 
-import com.google.common.collect.Maps;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.factories.CachingExcludeFactory;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.factories.ExcludeFactory;
@@ -26,12 +25,16 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.simpl
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec;
 import org.gradle.internal.component.model.ExcludeMetadata;
 import org.gradle.internal.component.model.IvyArtifactName;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+@ServiceScope(Scope.Build.class)
 public class ModuleExclusions {
     private final CachingExcludeFactory.MergeCaches mergeCaches = new CachingExcludeFactory.MergeCaches();
     // please keep the formatting below as it helps enabling or disabling stages
@@ -46,7 +49,7 @@ public class ModuleExclusions {
             mergeCaches
         )
     );
-    private final Map<ExcludeMetadata, ExcludeSpec> metadataToExcludeCache = Maps.newConcurrentMap();
+    private final Map<ExcludeMetadata, ExcludeSpec> metadataToExcludeCache = new ConcurrentHashMap<>();
     private final ExcludeSpec nothing;
 
     public ModuleExclusions() {

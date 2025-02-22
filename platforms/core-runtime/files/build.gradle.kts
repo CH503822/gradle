@@ -8,14 +8,16 @@ description = "Base tools to work with files"
 gradlebuildJava.usedInWorkers()
 
 dependencies {
-    implementation(project(":base-annotations"))
-    implementation(project(":functional"))
+    api(projects.stdlibJavaExtensions)
+
+    api(libs.jsr305)
+
     implementation(libs.guava)
     implementation(libs.slf4jApi)
 
-    testImplementation(project(":native"))
-    testImplementation(project(":base-services")) {
+    testImplementation(projects.native)
+    testImplementation(projects.baseServices) {
         because("TextUtil is needed")
     }
-    testImplementation(testFixtures(project(":native")))
+    testImplementation(testFixtures(projects.native))
 }

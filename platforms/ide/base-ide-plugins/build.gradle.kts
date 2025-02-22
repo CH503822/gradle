@@ -22,24 +22,25 @@ plugins {
 description = "Basic components required by the IDE plugins project"
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":core"))
-    implementation(project(":core-api"))
-    implementation(project(":dependency-management"))
-    implementation(project(":file-collections"))
-    implementation(project(":ide"))
-    implementation(project(":logging"))
-    implementation(project(":model-core"))
-    implementation(project(":process-services"))
+    api(projects.baseServices)
+    api(projects.coreApi)
+    api(projects.ide)
+    api(libs.inject)
+
+    implementation(projects.stdlibJavaExtensions)
+    implementation(projects.core)
+    implementation(projects.logging)
+    implementation(projects.loggingApi)
 
     implementation(libs.commonsLang)
-    implementation(libs.groovy)
     implementation(libs.guava)
-    implementation(libs.inject)
 
-    testImplementation(testFixtures(project(":core")))
+    runtimeOnly(projects.dependencyManagement)
+    runtimeOnly(libs.groovy)
 
-    testRuntimeOnly(project(":distributions-core")) {
+    testImplementation(testFixtures(projects.core))
+
+    testRuntimeOnly(projects.distributionsCore) {
         because("ProjectBuilder tests load services from a Gradle distribution.")
     }
 }

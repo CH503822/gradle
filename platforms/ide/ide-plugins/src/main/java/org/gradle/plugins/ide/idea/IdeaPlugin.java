@@ -19,15 +19,16 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.gradle.api.Action;
+import org.gradle.api.GradleException;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.component.BuildIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
+import org.gradle.api.configuration.BuildFeatures;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ConventionMapping;
 import org.gradle.api.internal.IConventionAware;
@@ -49,7 +50,10 @@ import org.gradle.api.tasks.TaskProvider;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.xml.XmlTransformer;
 import org.gradle.plugins.ide.api.XmlFileContentMerger;
+import org.gradle.plugins.ide.idea.internal.IdeaModuleInternal;
 import org.gradle.plugins.ide.idea.internal.IdeaModuleMetadata;
+import org.gradle.plugins.ide.idea.internal.IdeaModuleSupport;
+import org.gradle.plugins.ide.idea.internal.IdeaProjectInternal;
 import org.gradle.plugins.ide.idea.internal.IdeaScalaConfigurer;
 import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel;
 import org.gradle.plugins.ide.idea.model.IdeaModel;
@@ -67,10 +71,12 @@ import org.gradle.testing.base.TestingExtension;
 
 import javax.inject.Inject;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -101,6 +107,7 @@ public abstract class IdeaPlugin extends IdePlugin {
             return p.getExtensions().getByType(JavaPluginExtension.class).getTargetCompatibility();
         }
     };
+
     private static final String IDEA_MODULE_TASK_NAME = "ideaModule";
     private static final String IDEA_PROJECT_TASK_NAME = "ideaProject";
     private static final String IDEA_WORKSPACE_TASK_NAME = "ideaWorkspace";
@@ -168,7 +175,8 @@ public abstract class IdeaPlugin extends IdePlugin {
     private void configureIdeaProject(final Project project) {
         if (isRoot()) {
             XmlFileContentMerger ipr = new XmlFileContentMerger(new XmlTransformer());
-            final IdeaProject ideaProject = instantiator.newInstance(IdeaProject.class, project, ipr);
+            // Instantiating an internal subclass is required for Isolated Projects-safe model building
+            final IdeaProject ideaProject = instantiator.newInstance(IdeaProjectInternal.class, project, ipr);
             final TaskProvider<GenerateIdeaProject> projectTask = project.getTasks().register(IDEA_PROJECT_TASK_NAME, GenerateIdeaProject.class, ideaProject);
             projectTask.configure(new Action<GenerateIdeaProject>() {
                 @Override
@@ -241,7 +249,7 @@ public abstract class IdeaPlugin extends IdePlugin {
     private JavaVersion getMaxJavaModuleCompatibilityVersionFor(Function<Project, JavaVersion> toJavaVersion) {
         List<Project> allJavaProjects = getAllJavaProjects();
         if (allJavaProjects.isEmpty()) {
-            return JavaVersion.VERSION_1_6;
+            return IdeaModuleSupport.FALLBACK_MODULE_JAVA_COMPATIBILITY_VERSION;
         } else {
             return Collections.max(Lists.transform(allJavaProjects, toJavaVersion));
         }
@@ -258,7 +266,8 @@ public abstract class IdeaPlugin extends IdePlugin {
 
     private void configureIdeaModule(final ProjectInternal project) {
         IdeaModuleIml iml = new IdeaModuleIml(new XmlTransformer(), project.getProjectDir());
-        final IdeaModule module = instantiator.newInstance(IdeaModule.class, project, iml);
+        // Instantiating an internal subclass is required for Isolated Projects-safe model building
+        final IdeaModule module = instantiator.newInstance(IdeaModuleInternal.class, project, iml);
 
         final TaskProvider<GenerateIdeaModule> task = project.getTasks().register(IDEA_MODULE_TASK_NAME, GenerateIdeaModule.class, module);
         task.configure(new Action<GenerateIdeaModule>() {
@@ -273,7 +282,7 @@ public abstract class IdeaPlugin extends IdePlugin {
         module.setName(defaultModuleName);
 
         ConventionMapping conventionMapping = ((IConventionAware) module).getConventionMapping();
-        Set<File> sourceDirs = Sets.newLinkedHashSet();
+        Set<File> sourceDirs = new LinkedHashSet<>();
         conventionMapping.map("sourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() {
@@ -286,28 +295,28 @@ public abstract class IdeaPlugin extends IdePlugin {
                 return project.getProjectDir();
             }
         });
-        Set<File> testSourceDirs = Sets.newLinkedHashSet();
+        Set<File> testSourceDirs = new LinkedHashSet<>();
         conventionMapping.map("testSourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() {
                 return testSourceDirs;
             }
         });
-        Set<File> resourceDirs = Sets.newLinkedHashSet();
+        Set<File> resourceDirs = new LinkedHashSet<>();
         conventionMapping.map("resourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() throws Exception {
                 return resourceDirs;
             }
         });
-        Set<File> testResourceDirs = Sets.newLinkedHashSet();
+        Set<File> testResourceDirs = new LinkedHashSet<>();
         conventionMapping.map("testResourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() throws Exception {
                 return testResourceDirs;
             }
         });
-        Set<File> excludeDirs = Sets.newLinkedHashSet();
+        Set<File> excludeDirs = new LinkedHashSet<>();
         conventionMapping.map("excludeDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() {
@@ -378,7 +387,7 @@ public abstract class IdeaPlugin extends IdePlugin {
 
         // Convention
         ConventionMapping convention = ((IConventionAware) ideaModel.getModule()).getConventionMapping();
-        Set<File> sourceDirs = Sets.newLinkedHashSet();
+        Set<File> sourceDirs = new LinkedHashSet<>();
         convention.map("sourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() {
@@ -387,7 +396,7 @@ public abstract class IdeaPlugin extends IdePlugin {
                 return sourceDirs;
             }
         });
-        Set<File> resourceDirs = Sets.newLinkedHashSet();
+        Set<File> resourceDirs = new LinkedHashSet<>();
         convention.map("resourceDirs", new Callable<Set<File>>() {
             @Override
             public Set<File> call() {
@@ -427,11 +436,11 @@ public abstract class IdeaPlugin extends IdePlugin {
     }
 
     private void setupScopes(JvmFeatureInternal mainFeature, JvmTestSuite defaultTestSuite) {
-        Map<String, Map<String, Collection<Configuration>>> scopes = Maps.newLinkedHashMap();
+        Map<String, Map<String, Collection<Configuration>>> scopes = new LinkedHashMap<>();
         for (GeneratedIdeaScope scope : GeneratedIdeaScope.values()) {
-            Map<String, Collection<Configuration>> plusMinus = Maps.newLinkedHashMap();
-            plusMinus.put(IdeaDependenciesProvider.SCOPE_PLUS, Lists.<Configuration>newArrayList());
-            plusMinus.put(IdeaDependenciesProvider.SCOPE_MINUS, Lists.<Configuration>newArrayList());
+            Map<String, Collection<Configuration>> plusMinus = new LinkedHashMap<>();
+            plusMinus.put(IdeaDependenciesProvider.SCOPE_PLUS, new ArrayList<>());
+            plusMinus.put(IdeaDependenciesProvider.SCOPE_MINUS, new ArrayList<>());
             scopes.put(scope.name(), plusMinus);
         }
 
@@ -493,20 +502,33 @@ public abstract class IdeaPlugin extends IdePlugin {
     }
 
     private void configureForScalaPlugin() {
+        boolean isolatedProjects = getBuildFeatures().getIsolatedProjects().getActive().get();
         project.getPlugins().withType(ScalaBasePlugin.class, new Action<ScalaBasePlugin>() {
             @Override
             public void execute(ScalaBasePlugin scalaBasePlugin) {
-                ideaModuleDependsOnRoot();
+                ideaModuleDependsOnRoot(isolatedProjects);
             }
         });
         if (isRoot()) {
-            new IdeaScalaConfigurer(project).configure();
+            new IdeaScalaConfigurer(project, scalaProjects -> {
+                if (!scalaProjects.isEmpty() && isolatedProjects) {
+                    failOnIncompatibleWithIsolatedProjects();
+                }
+            }).configure();
         }
     }
 
-    private void ideaModuleDependsOnRoot() {
+    private void ideaModuleDependsOnRoot(boolean isolatedProjects) {
+        if (isolatedProjects) {
+            failOnIncompatibleWithIsolatedProjects();
+        }
+
         // see IdeaScalaConfigurer which requires the ipr to be generated first
         project.getTasks().named(IDEA_MODULE_TASK_NAME, dependsOn(project.getRootProject().getTasks().named(IDEA_PROJECT_TASK_NAME)));
+    }
+
+    private static void failOnIncompatibleWithIsolatedProjects() {
+        throw new GradleException("Applying 'idea' plugin to Scala projects is not supported with Isolated Projects. Disable Isolated Projects to use this integration.");
     }
 
     private void linkCompositeBuildDependencies(final ProjectInternal project) {
@@ -539,4 +561,7 @@ public abstract class IdeaPlugin extends IdePlugin {
             reference.visitDependencies(context);
         }
     }
+
+    @Inject
+    protected abstract BuildFeatures getBuildFeatures();
 }

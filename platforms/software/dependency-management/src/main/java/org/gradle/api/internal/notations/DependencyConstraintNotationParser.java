@@ -27,46 +27,93 @@ import org.gradle.api.internal.artifacts.DefaultProjectDependencyFactory;
 import org.gradle.api.internal.artifacts.dependencies.DefaultDependencyConstraint;
 import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependencyConstraint;
 import org.gradle.api.internal.artifacts.dependencies.DependencyVariant;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.attributes.AttributesFactory;
+import org.gradle.api.provider.Provider;
 import org.gradle.internal.exceptions.DiagnosticsVisitor;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.typeconversion.NotationConvertResult;
 import org.gradle.internal.typeconversion.NotationConverter;
+import org.gradle.internal.typeconversion.NotationConverterToNotationParserAdapter;
 import org.gradle.internal.typeconversion.NotationParser;
 import org.gradle.internal.typeconversion.NotationParserBuilder;
 import org.gradle.internal.typeconversion.TypeConversionException;
 import org.gradle.internal.typeconversion.TypedNotationConverter;
 
 public class DependencyConstraintNotationParser {
-    public static NotationParser<Object, DependencyConstraint> parser(Instantiator instantiator, DefaultProjectDependencyFactory dependencyFactory, Interner<String> stringInterner, ImmutableAttributesFactory attributesFactory) {
-        return NotationParserBuilder
+
+    public static DependencyConstraintNotationParser parser(Instantiator instantiator, DefaultProjectDependencyFactory dependencyFactory, Interner<String> stringInterner, AttributesFactory attributesFactory) {
+        DependencyStringNotationConverter<DefaultDependencyConstraint> stringNotationConverter = new DependencyStringNotationConverter<>(instantiator, DefaultDependencyConstraint.class, stringInterner);
+        MinimalExternalDependencyNotationConverter minimalExternalDependencyNotationConverter = new MinimalExternalDependencyNotationConverter(instantiator, attributesFactory);
+        ProjectDependencyNotationConverter projectDependencyNotationConverter = new ProjectDependencyNotationConverter(instantiator);
+        NotationParser<Object, DependencyConstraint> notationParser = NotationParserBuilder
             .toType(DependencyConstraint.class)
-            .fromType(MinimalExternalModuleDependency.class, new MinimalExternalDependencyNotationConverter(instantiator, attributesFactory))
-            .fromCharSequence(new DependencyStringNotationConverter<>(instantiator, DefaultDependencyConstraint.class, stringInterner))
+            .fromType(MinimalExternalModuleDependency.class, minimalExternalDependencyNotationConverter)
+            .fromCharSequence(stringNotationConverter)
             .converter(new DependencyMapNotationConverter<>(instantiator, DefaultDependencyConstraint.class))
-            .fromType(Project.class, new DependencyConstraintProjectNotationConverter(dependencyFactory))
-            .converter(new ProjectDependencyNotationConverter())
-            .invalidNotationMessage("Comprehensive documentation on dependency notations is available in DSL reference for DependencyHandler type.")
+            .fromType(Project.class, new DependencyConstraintProjectNotationConverter(instantiator, dependencyFactory))
+            .converter(projectDependencyNotationConverter)
+            .invalidNotationMessage("Comprehensive documentation on dependency notations is available in DSL reference for DependencyConstraintHandler type.")
             .toComposite();
+        return new DependencyConstraintNotationParser(
+            notationParser,
+            new NotationConverterToNotationParserAdapter<>(stringNotationConverter),
+            new NotationConverterToNotationParserAdapter<>(minimalExternalDependencyNotationConverter),
+            new NotationConverterToNotationParserAdapter<>(projectDependencyNotationConverter)
+        );
+    }
+
+    private final NotationParser<Object, DependencyConstraint> notationParser;
+    private final NotationParser<String, ? extends DependencyConstraint> stringNotationParser;
+    private final NotationParser<MinimalExternalModuleDependency, ? extends DependencyConstraint> minimalExternalModuleDependencyNotationParser;
+    private final NotationParser<ProjectDependency, ? extends DependencyConstraint> projectDependencyNotationParser;
+
+    private DependencyConstraintNotationParser(
+        NotationParser<Object, DependencyConstraint> notationParser,
+        NotationParser<String, ? extends DependencyConstraint> stringNotationParser,
+        NotationParser<MinimalExternalModuleDependency, ? extends DependencyConstraint> minimalExternalModuleDependencyNotationParser,
+        NotationParser<ProjectDependency, ? extends DependencyConstraint> projectDependencyNotationParser
+    ) {
+        this.notationParser = notationParser;
+        this.stringNotationParser = stringNotationParser;
+        this.minimalExternalModuleDependencyNotationParser = minimalExternalModuleDependencyNotationParser;
+        this.projectDependencyNotationParser = projectDependencyNotationParser;
+    }
+
+    public NotationParser<Object, DependencyConstraint> getNotationParser() {
+        return notationParser;
+    }
+
+    public NotationParser<String, ? extends DependencyConstraint> getStringNotationParser() {
+        return stringNotationParser;
+    }
+
+    public NotationParser<MinimalExternalModuleDependency, ? extends DependencyConstraint> getMinimalExternalModuleDependencyNotationParser() {
+        return minimalExternalModuleDependencyNotationParser;
+    }
+
+    public NotationParser<ProjectDependency, ? extends DependencyConstraint> getProjectDependencyNotationParser() {
+        return projectDependencyNotationParser;
     }
 
     private static class ProjectDependencyNotationConverter extends TypedNotationConverter<ProjectDependency, DependencyConstraint> {
+        private final Instantiator instantiator;
 
-        public ProjectDependencyNotationConverter() {
+        public ProjectDependencyNotationConverter(Instantiator instantiator) {
             super(ProjectDependency.class);
+            this.instantiator = instantiator;
         }
 
         @Override
         protected DependencyConstraint parseType(ProjectDependency notation) {
-            return new DefaultProjectDependencyConstraint(notation);
+            return instantiator.newInstance(DefaultProjectDependencyConstraint.class, notation);
         }
     }
 
     private static class MinimalExternalDependencyNotationConverter implements NotationConverter<MinimalExternalModuleDependency, DefaultDependencyConstraint> {
         private final Instantiator instantiator;
-        private final ImmutableAttributesFactory attributesFactory;
+        private final AttributesFactory attributesFactory;
 
-        public MinimalExternalDependencyNotationConverter(Instantiator instantiator, ImmutableAttributesFactory attributesFactory) {
+        public MinimalExternalDependencyNotationConverter(Instantiator instantiator, AttributesFactory attributesFactory) {
             this.instantiator = instantiator;
             this.attributesFactory = attributesFactory;
         }
@@ -103,6 +150,16 @@ public class DependencyConstraintNotationParser {
 
         @Override
         public void requireCapabilities(Object... capabilityNotations) {
+            throw new InvalidUserDataException("Capabilities are not supported by dependency constraints");
+        }
+
+        @Override
+        public void requireFeature(String featureName) {
+            throw new InvalidUserDataException("Capabilities are not supported by dependency constraints");
+        }
+
+        @Override
+        public void requireFeature(Provider<String> featureName) {
             throw new InvalidUserDataException("Capabilities are not supported by dependency constraints");
         }
     }

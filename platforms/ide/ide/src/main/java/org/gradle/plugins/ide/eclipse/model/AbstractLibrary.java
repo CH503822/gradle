@@ -17,12 +17,12 @@
 package org.gradle.plugins.ide.eclipse.model;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.Maps;
 import groovy.util.Node;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.plugins.ide.eclipse.model.internal.FileReferenceFactory;
 
 import javax.annotation.Nullable;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -89,7 +89,7 @@ public abstract class AbstractLibrary extends AbstractClasspathEntry {
 
     @Override
     public void appendNode(Node node) {
-        Map<String, Object> attributes = Maps.newLinkedHashMap();
+        Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("sourcepath", sourcePath == null ? null : sourcePath.getPath());
         addClasspathEntry(node, attributes);
     }
@@ -106,7 +106,7 @@ public abstract class AbstractLibrary extends AbstractClasspathEntry {
             return false;
         }
         AbstractLibrary that = (AbstractLibrary) o;
-        return Objects.equal(isExported(), that.isExported())
+        return isExported() == that.isExported()
             && Objects.equal(getAccessRules(), that.getAccessRules())
             && Objects.equal(getJavadocPath(), that.getJavadocPath())
             && Objects.equal(getNativeLibraryLocation(), that.getNativeLibraryLocation())

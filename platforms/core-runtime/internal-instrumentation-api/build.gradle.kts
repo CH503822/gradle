@@ -15,16 +15,17 @@
  */
 
 plugins {
-    id("gradlebuild.internal.java")
+    id("gradlebuild.distribution.implementation-java")
 }
 
 dependencies {
-    implementation(project(":model-core"))
-    implementation(project(":base-annotations"))
-    implementation(project(":base-services"))
+    api(projects.baseAsm)
+
+    api(libs.asm)
+    api(libs.asmTree)
+    api(libs.jsr305)
+    api(projects.stdlibJavaExtensions)
 
     implementation(libs.groovy)
-    implementation(libs.asm)
-    implementation(libs.asmTree)
-    implementation(libs.asmCommons)
 }
+

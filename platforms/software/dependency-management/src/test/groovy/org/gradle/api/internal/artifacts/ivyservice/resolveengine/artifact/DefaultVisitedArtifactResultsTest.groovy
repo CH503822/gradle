@@ -16,8 +16,7 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact
 
-import org.gradle.api.artifacts.ResolutionStrategy
-import org.gradle.api.internal.artifacts.transform.ArtifactVariantSelector
+import com.google.common.collect.ImmutableList
 import spock.lang.Specification
 
 class DefaultVisitedArtifactResultsTest extends Specification {
@@ -27,14 +26,14 @@ class DefaultVisitedArtifactResultsTest extends Specification {
         def variant1Artifacts = Stub(ResolvedArtifactSet)
         def variant2Artifacts = Stub(ResolvedArtifactSet)
 
-        def selector = Stub(ArtifactVariantSelector)
+        def services = Stub(ArtifactSelectionServices)
 
         given:
-        artifacts1.select(selector, _) >> variant1Artifacts
-        artifacts2.select(selector, _) >> variant2Artifacts
+        artifacts1.select(services, _) >> variant1Artifacts
+        artifacts2.select(services, _) >> variant2Artifacts
 
-        def results = new DefaultVisitedArtifactResults(ResolutionStrategy.SortOrder.CONSUMER_FIRST, [artifacts1, artifacts2])
-        def selected = results.select(selector, Mock(ArtifactSelectionSpec))
+        def results = new DefaultVisitedArtifactResults(ImmutableList.of(artifacts1, artifacts2))
+        def selected = results.select(services, Mock(ArtifactSelectionSpec), false)
 
         expect:
         selected.getArtifacts() instanceof CompositeResolvedArtifactSet
@@ -50,14 +49,14 @@ class DefaultVisitedArtifactResultsTest extends Specification {
         def variant1Artifacts = new BrokenResolvedArtifactSet(new Exception())
         def variant2Artifacts = new UnavailableResolvedArtifactSet(new Exception())
 
-        def selector = Stub(ArtifactVariantSelector)
+        def services = Stub(ArtifactSelectionServices)
 
         given:
-        artifacts1.select(selector, _) >> variant1Artifacts
-        artifacts2.select(selector, _) >> variant2Artifacts
+        artifacts1.select(services, _) >> variant1Artifacts
+        artifacts2.select(services, _) >> variant2Artifacts
 
-        def results = new DefaultVisitedArtifactResults(ResolutionStrategy.SortOrder.CONSUMER_FIRST, [artifacts1, artifacts2])
-        def selected = results.select(selector, Mock(ArtifactSelectionSpec))
+        def results = new DefaultVisitedArtifactResults(ImmutableList.of(artifacts1, artifacts2))
+        def selected = results.select(services, Mock(ArtifactSelectionSpec), false)
 
         expect:
         selected.getArtifacts() instanceof CompositeResolvedArtifactSet
@@ -73,14 +72,14 @@ class DefaultVisitedArtifactResultsTest extends Specification {
         def variant1Artifacts = Stub(ResolvedArtifactSet)
         def variant2Artifacts = Stub(ResolvedArtifactSet)
 
-        def selector = Stub(ArtifactVariantSelector)
+        def services = Stub(ArtifactSelectionServices)
 
         given:
-        artifacts1.select(selector, _) >> variant1Artifacts
-        artifacts2.select(selector, _) >> variant2Artifacts
+        artifacts1.select(services, _) >> variant1Artifacts
+        artifacts2.select(services, _) >> variant2Artifacts
 
-        def results = new DefaultVisitedArtifactResults(ResolutionStrategy.SortOrder.CONSUMER_FIRST, [artifacts1, artifacts2])
-        def selected = results.selectLenient(selector, Mock(ArtifactSelectionSpec))
+        def results = new DefaultVisitedArtifactResults(ImmutableList.of(artifacts1, artifacts2))
+        def selected = results.select(services, Mock(ArtifactSelectionSpec), true)
 
         expect:
         selected.getArtifacts() instanceof CompositeResolvedArtifactSet
@@ -96,14 +95,14 @@ class DefaultVisitedArtifactResultsTest extends Specification {
         def variant1Artifacts = new UnavailableResolvedArtifactSet(new Exception())
         def variant2Artifacts = Stub(ResolvedArtifactSet)
 
-        def selector = Stub(ArtifactVariantSelector)
+        def services = Stub(ArtifactSelectionServices)
 
         given:
-        artifacts1.select(selector, _) >> variant1Artifacts
-        artifacts2.select(selector, _) >> variant2Artifacts
+        artifacts1.select(services, _) >> variant1Artifacts
+        artifacts2.select(services, _) >> variant2Artifacts
 
-        def results = new DefaultVisitedArtifactResults(ResolutionStrategy.SortOrder.CONSUMER_FIRST, [artifacts1, artifacts2])
-        def selected = results.selectLenient(selector, Mock(ArtifactSelectionSpec))
+        def results = new DefaultVisitedArtifactResults(ImmutableList.of(artifacts1, artifacts2))
+        def selected = results.select(services, Mock(ArtifactSelectionSpec), true)
 
         expect:
         selected.getArtifacts() == variant2Artifacts
@@ -115,14 +114,14 @@ class DefaultVisitedArtifactResultsTest extends Specification {
         def variant1Artifacts = new BrokenResolvedArtifactSet(new Exception())
         def variant2Artifacts = Stub(ResolvedArtifactSet)
 
-        def selector = Stub(ArtifactVariantSelector)
+        def services = Stub(ArtifactSelectionServices)
 
         given:
-        artifacts1.select(selector, _) >> variant1Artifacts
-        artifacts2.select(selector, _) >> variant2Artifacts
+        artifacts1.select(services, _) >> variant1Artifacts
+        artifacts2.select(services, _) >> variant2Artifacts
 
-        def results = new DefaultVisitedArtifactResults(ResolutionStrategy.SortOrder.CONSUMER_FIRST, [artifacts1, artifacts2])
-        def selected = results.selectLenient(selector, Mock(ArtifactSelectionSpec))
+        def results = new DefaultVisitedArtifactResults(ImmutableList.of(artifacts1, artifacts2))
+        def selected = results.select(services, Mock(ArtifactSelectionSpec), true)
 
         expect:
         selected.getArtifacts() instanceof CompositeResolvedArtifactSet

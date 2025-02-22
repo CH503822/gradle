@@ -51,10 +51,28 @@ public interface ProviderOperationParameters {
     File getJavaHome();
 
     /**
-     * @return When null, use the provider's default JVM arguments. When empty, use no JVM arguments.
+     * Returns the concatenated list of {@link #getBaseJvmArguments()} and {@link #getAdditionalJvmArguments()}. The method is only kept for backwards compatibility (see #31462) to support Gradle versions where {@link #getBaseJvmArguments()} and  {@link #getAdditionalJvmArguments()} is not yet available.
+     *
+     * @return null if no JVM arguments are provided, otherwise a concatenated list of JVM arguments.
      */
     @Nullable
     List<String> getJvmArguments();
+
+    /**
+     * Arguments, which will override the default JVM arguments.
+     *
+     * @return null if no JVM arguments are provided, otherwise a list of JVM arguments.
+     */
+    @Nullable
+    List<String> getBaseJvmArguments();
+
+    /**
+     * Additional arguments, which will be appended to the default/overridden JVM arguments.
+     *
+     * @return null if no additional JVM arguments are provided, otherwise a list of additional JVM arguments.
+     */
+    @Nullable
+    List<String> getAdditionalJvmArguments();
 
     /**
      * @return When null, use the provider's default environment variables. When empty, use no environment variables.
@@ -169,4 +187,14 @@ public interface ProviderOperationParameters {
      * @since 7.6
      */
     Map<String, String> getSystemProperties(Map<String, String> defaultValue);
+
+    /**
+     * Handles a value streamed from the build action. Blocks until the value has been handled.
+     *
+     * <p>This method is called from the provider's message handling loop in the client process, so is required to block until handling is complete so as to preserve
+     * the message ordering.</p>
+     *
+     * @since 8.6
+     */
+    void onStreamedValue(Object value);
 }

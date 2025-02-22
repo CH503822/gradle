@@ -4,24 +4,37 @@ plugins {
 
 description = "A set of general-purpose resource abstractions"
 
-dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":enterprise-operations"))
-    implementation(project(":files"))
-    implementation(project(":logging"))
-    implementation(project(":messaging"))
-    implementation(project(":native"))
+errorprone {
+    disabledChecks.addAll(
+        "UndefinedEquals", // 1 occurrences
+    )
+}
 
-    implementation(libs.slf4jApi)
+dependencies {
+    api(projects.stdlibJavaExtensions)
+    api(projects.buildOperations)
+    api(projects.hashing)
+    api(projects.baseServices)
+    api(projects.messaging)
+    api(projects.native)
+
+    api(libs.jsr305)
+
+    implementation(projects.files)
+    implementation(projects.logging)
+
     implementation(libs.guava)
     implementation(libs.commonsIo)
 
-    testImplementation(project(":process-services"))
-    testImplementation(project(":core-api"))
-    testImplementation(project(":file-collections"))
-    testImplementation(project(":snapshots"))
+    testImplementation(projects.processServices)
+    testImplementation(projects.coreApi)
+    testImplementation(projects.fileCollections)
+    testImplementation(projects.snapshots)
 
-    testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(projects.core))
 
-    integTestDistributionRuntimeOnly(project(":distributions-core"))
+    integTestDistributionRuntimeOnly(projects.distributionsCore)
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

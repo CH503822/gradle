@@ -4,29 +4,49 @@ plugins {
 
 description = "Base plugin for the maven and ivy publish plugins. Defines the publishing extension."
 
-dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":functional"))
-    implementation(project(":logging"))
-    implementation(project(":file-collections"))
-    implementation(project(":core-api"))
-    implementation(project(":model-core"))
-    implementation(project(":core"))
-    implementation(project(":base-services-groovy")) // for 'Specs'
-    implementation(project(":dependency-management"))
+errorprone {
+    disabledChecks.addAll(
+        "InlineMeSuggester", // 7 occurrences
+        "MixedMutabilityReturnType", // 5 occurrences
+    )
+}
 
-    implementation(libs.groovy)
-    implementation(libs.guava)
+dependencies {
+    api(projects.baseServices)
+    api(projects.core)
+    api(projects.coreApi)
+    api(projects.dependencyManagement)
+    api(projects.fileCollections)
+    api(projects.hashing)
+    api(projects.logging)
+    api(projects.loggingApi)
+    api(projects.modelCore)
+    api(projects.serviceProvider)
+    api(projects.stdlibJavaExtensions)
+
+    api(libs.groovy)
+    api(libs.inject)
+    api(libs.jsr305)
+
+    implementation(projects.serviceLookup)
+    implementation(projects.baseServicesGroovy) {
+        because("Required for Specs")
+    }
+    implementation(projects.functional)
+
     implementation(libs.commonsLang)
     implementation(libs.gson)
-    implementation(libs.inject)
+    implementation(libs.guava)
 
-    testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(projects.core))
 
-    testRuntimeOnly(project(":distributions-core")) {
+    testRuntimeOnly(projects.distributionsCore) {
         because("Tests instantiate DefaultClassLoaderRegistry which requires a 'gradle-plugins.properties' through DefaultPluginModuleRegistry")
     }
-    integTestDistributionRuntimeOnly(project(":distributions-core"))
+    integTestDistributionRuntimeOnly(projects.distributionsCore)
 }
 
 integTest.usesJavadocCodeSnippets = true
+tasks.isolatedProjectsIntegTest {
+    enabled = false
+}

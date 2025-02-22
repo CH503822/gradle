@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 the original author or authors.
+ * Copyright 2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,14 @@
 
 package org.gradle.api.problems;
 
-import org.gradle.api.Incubating;
 
-import java.io.Serializable;
+import org.gradle.api.Incubating;
 
 /**
  * Represents a location information of a problem.
  *
- * @since 8.6
+ * @since 8.13
  */
 @Incubating
-public interface ProblemLocation extends Serializable {
-
-    /**
-     * Returns an identifier of the location type.
-     * <p>
-     * As locations will be serialized into a JSON format,
-     * this identifier is used to distinguish between different location types.
-     *
-     * @since 8.6
-     */
-    String getType();
+public interface ProblemLocation {
 }

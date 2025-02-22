@@ -17,13 +17,20 @@
 package org.gradle.api.problems.internal;
 
 import org.gradle.api.problems.Problems;
+import org.gradle.internal.reflect.Instantiator;
 
 public interface InternalProblems extends Problems {
 
     /**
      * Returns a reporter then provides additional problem service functionality specific for Gradle internals.
-     * <p>
+     *
      * @return The reporter.
      */
     InternalProblemReporter getInternalReporter();
+
+    AdditionalDataBuilderFactory getAdditionalDataBuilderFactory();
+
+    Instantiator getInstantiator();
+
+    InternalProblemBuilder getProblemBuilder();
 }

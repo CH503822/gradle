@@ -18,8 +18,11 @@ package org.gradle.internal.build;
 
 import org.gradle.api.artifacts.component.BuildIdentifier;
 import org.gradle.api.internal.GradleInternal;
+import org.gradle.api.internal.project.ProjectState;
 import org.gradle.initialization.IncludedBuildSpec;
 import org.gradle.internal.DisplayName;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 import org.gradle.util.Path;
 
 import java.io.File;
@@ -30,6 +33,7 @@ import java.util.function.Function;
  *
  * Implementations are not yet entirely thread-safe, but should be.
  */
+@ServiceScope(Scope.Build.class)
 public interface BuildState {
     DisplayName getDisplayName();
 
@@ -68,6 +72,13 @@ public interface BuildState {
      * Have the projects been loaded, ie has {@link #ensureProjectsLoaded()} already completed for this build?
      */
     boolean isProjectsLoaded();
+
+    /**
+     * Has the mutable model for projects been created yet?
+     *
+     * @see ProjectState#isCreated()
+     */
+    boolean isProjectsCreated();
 
     /**
      * Ensures all projects in this build are configured, if not already done.

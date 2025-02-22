@@ -30,6 +30,7 @@ import org.gradle.api.component.ComponentWithVariants
 import org.gradle.api.component.SoftwareComponentVariant
 import org.gradle.api.internal.artifacts.DefaultExcludeRule
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
+import org.gradle.api.internal.artifacts.capability.DefaultSpecificCapabilitySelector
 import org.gradle.api.internal.artifacts.dependencies.DefaultDependencyArtifact
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
@@ -39,6 +40,7 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.internal.component.UsageContext
 import org.gradle.api.internal.provider.Providers
+import org.gradle.api.provider.Provider
 import org.gradle.api.publish.internal.PublicationInternal
 import org.gradle.api.publish.internal.mapping.ComponentDependencyResolver
 import org.gradle.api.publish.internal.mapping.DependencyCoordinateResolverFactory
@@ -80,14 +82,13 @@ class GradleModuleMetadataWriterTest extends Specification {
     def resolverFactory = new TestDependencyCoordinateResolverFactory()
 
     private writeTo(Writer writer, PublicationInternal publication, List<PublicationInternal> publications) {
-        InvalidPublicationChecker checker = new InvalidPublicationChecker(publication.getName(), ':task')
+        InvalidPublicationChecker checker = new InvalidPublicationChecker(publication.getName(), ':task', [] as Set)
         ModuleMetadataSpec spec = new ModuleMetadataSpecBuilder(
             publication,
             publications,
             checker,
-            resolverFactory,
-            []
-        ).build()
+            resolverFactory
+        ).build().get()
         checker.validate()
 
         new GradleModuleMetadataWriter(
@@ -313,7 +314,7 @@ class GradleModuleMetadataWriterTest extends Specification {
         d8.versionConstraint >> requires("v1")
         d8.transitive >> true
         d8.attributes >> ImmutableAttributes.EMPTY
-        d8.requestedCapabilities >> [new DefaultImmutableCapability("org", "test", "1.0")]
+        d8.capabilitySelectors >> ([new DefaultSpecificCapabilitySelector(new DefaultImmutableCapability("org", "test", "1"))] as Set)
 
         def v1 = Stub(UsageContext)
         v1.name >> "v1"
@@ -367,8 +368,7 @@ class GradleModuleMetadataWriterTest extends Specification {
           "requestedCapabilities": [
             {
               "group": "org",
-              "name": "test",
-              "version": "1.0"
+              "name": "test"
             }
           ]
         }
@@ -1327,8 +1327,8 @@ class GradleModuleMetadataWriterTest extends Specification {
         String resolvedVersion
 
         @Override
-        DependencyResolvers createCoordinateResolvers(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy) {
-            return new DependencyResolvers(null, new TestVariantDependencyResolver(resolvedVersion))
+        Provider<DependencyResolvers> createCoordinateResolvers(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy) {
+            return Providers.of(new DependencyResolvers(null, new TestVariantDependencyResolver(resolvedVersion)))
         }
 
         void resolveToVersion(String resolvedVersion) {

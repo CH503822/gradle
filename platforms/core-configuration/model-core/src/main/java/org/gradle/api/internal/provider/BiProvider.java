@@ -16,6 +16,7 @@
 package org.gradle.api.internal.provider;
 
 import org.gradle.api.provider.Provider;
+import org.gradle.internal.evaluation.EvaluationScopeContext;
 
 import javax.annotation.Nullable;
 import java.util.function.BiFunction;
@@ -35,14 +36,16 @@ public class BiProvider<R, A, B> extends AbstractMinimalProvider<R> {
     }
 
     @Override
-    public String toString() {
+    protected String toStringNoReentrance() {
         return String.format("and(%s, %s)", left, right);
     }
 
     @Override
     public boolean calculatePresence(ValueConsumer consumer) {
-        if (!left.calculatePresence(consumer) || !right.calculatePresence(consumer)) {
-            return false;
+        try (EvaluationScopeContext ignored = openScope()) {
+            if (!left.calculatePresence(consumer) || !right.calculatePresence(consumer)) {
+                return false;
+            }
         }
         // Purposefully only calculate full value if left & right are both present, to save time
         return super.calculatePresence(consumer);
@@ -50,31 +53,36 @@ public class BiProvider<R, A, B> extends AbstractMinimalProvider<R> {
 
     @Override
     public ExecutionTimeValue<? extends R> calculateExecutionTimeValue() {
-        return isChangingValue(left) || isChangingValue(right)
-            ? ExecutionTimeValue.changingValue(this)
-            : super.calculateExecutionTimeValue();
+        try (EvaluationScopeContext ignored = openScope()) {
+            if (isChangingValue(left) || isChangingValue(right)) {
+                return ExecutionTimeValue.changingValue(this);
+            }
+        }
+        return super.calculateExecutionTimeValue();
     }
 
-    private boolean isChangingValue(ProviderInternal<?> provider) {
+    private static boolean isChangingValue(ProviderInternal<?> provider) {
         return provider.calculateExecutionTimeValue().isChangingValue();
     }
 
     @Override
     protected Value<? extends R> calculateOwnValue(ValueConsumer consumer) {
-        Value<? extends A> leftValue = left.calculateValue(consumer);
-        if (leftValue.isMissing()) {
-            return leftValue.asType();
-        }
-        Value<? extends B> rightValue = right.calculateValue(consumer);
-        if (rightValue.isMissing()) {
-            return rightValue.asType();
-        }
+        try (EvaluationScopeContext ignored = openScope()) {
+            Value<? extends A> leftValue = left.calculateValue(consumer);
+            if (leftValue.isMissing()) {
+                return leftValue.asType();
+            }
+            Value<? extends B> rightValue = right.calculateValue(consumer);
+            if (rightValue.isMissing()) {
+                return rightValue.asType();
+            }
 
-        R combinedUnpackedValue = combiner.apply(leftValue.getWithoutSideEffect(), rightValue.getWithoutSideEffect());
+            R combinedUnpackedValue = combiner.apply(leftValue.getWithoutSideEffect(), rightValue.getWithoutSideEffect());
 
-        return Value.ofNullable(combinedUnpackedValue)
-            .withSideEffect(SideEffect.fixedFrom(leftValue))
-            .withSideEffect(SideEffect.fixedFrom(rightValue));
+            return Value.ofNullable(combinedUnpackedValue)
+                .withSideEffect(SideEffect.fixedFrom(leftValue))
+                .withSideEffect(SideEffect.fixedFrom(rightValue));
+        }
     }
 
     @Nullable
@@ -85,6 +93,8 @@ public class BiProvider<R, A, B> extends AbstractMinimalProvider<R> {
 
     @Override
     public ValueProducer getProducer() {
-        return new PlusProducer(left.getProducer(), right.getProducer());
+        try (EvaluationScopeContext ignored = openScope()) {
+            return new PlusProducer(left.getProducer(), right.getProducer());
+        }
     }
 }

@@ -60,7 +60,7 @@ class LocalExcludeResolveIntegrationTest extends AbstractDependencyResolutionTes
 
         and:
         buildFile << """
-repositories { maven { url "${mavenRepo().uri}" } }
+repositories { maven { url = "${mavenRepo().uri}" } }
 configurations { compile }
 dependencies {
     compile('${testModule.groupId}:${testModule.artifactId}:${testModule.version}') {
@@ -102,7 +102,7 @@ task check {
 
         buildFile << """
 repositories {
-    maven { url '${repo.uri}' }
+    maven { url = '${repo.uri}' }
 }
 configurations {
     excluded {
@@ -149,7 +149,7 @@ task test {
         testModule.dependsOn(fooModule).publish()
 
         buildFile << """
-repositories { maven { url "${mavenRepo().uri}" } }
+repositories { maven { url = "${mavenRepo().uri}" } }
 
 configurations { compile }
 
@@ -167,6 +167,7 @@ task check {
 }
 """
         expect:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds "check"
 
         where:
@@ -183,40 +184,18 @@ task check {
             .dependsOn('org.gradle.test', 'transitive', '1.0')
             .publish()
 
-        createDirs("a", "b", "c")
         settingsFile << """
             rootProject.name = 'root'
-            include 'a', 'b', 'c'
-"""
+            include 'a'
+            include 'b'
+            dependencyResolutionManagement {
+                ${mavenTestRepository()}
+            }
+        """
+
         buildFile << """
-            allprojects {
-                apply plugin: 'java'
-                repositories { maven { url "${mavenRepo.uri}" } }
-            }
-
-            project(':a') {
-                configurations {
-                    implementation {
-                        exclude module: 'direct'
-                        exclude module: 'transitive'
-                    }
-                    other {
-                        exclude module: 'external'
-                    }
-                }
-                dependencies {
-                    implementation 'org.gradle.test:external:1.0'
-                    implementation 'org.gradle.test:direct:1.0'
-                    implementation project(':b')
-                }
-            }
-
-            project(':b') {
-                configurations {
-                    implementation {
-                        exclude module: 'external' // Only applies to transitive dependencies of 'b'
-                    }
-                }
+            plugins {
+                id("java-library")
             }
 
             dependencies {
@@ -233,7 +212,40 @@ task check {
                     assert runtimeClasspath*.name == ['a.jar', 'external-1.0.jar', 'b.jar']
                 }
             }
-"""
+        """
+
+        file("a/build.gradle") << """
+            plugins {
+                id("java-library")
+            }
+
+            configurations {
+                implementation {
+                    exclude module: 'direct'
+                    exclude module: 'transitive'
+                }
+                other {
+                    exclude module: 'external'
+                }
+            }
+            dependencies {
+                implementation 'org.gradle.test:external:1.0'
+                implementation 'org.gradle.test:direct:1.0'
+                implementation project(':b')
+            }
+        """
+
+        file("b/build.gradle") << """
+            plugins {
+                id("java-library")
+            }
+
+            configurations {
+                implementation {
+                    exclude module: 'external' // Only applies to transitive dependencies of 'b'
+                }
+            }
+        """
 
         expect:
         succeeds ":checkDeps"
@@ -278,7 +290,7 @@ task check {
         when:
         buildFile << """
 repositories {
-    maven { url '${mavenRepo.uri}' }
+    maven { url = '${mavenRepo.uri}' }
 }
 configurations {
     excluded {

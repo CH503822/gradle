@@ -20,28 +20,23 @@ import com.google.common.collect.ImmutableListMultimap
 import org.gradle.api.Action
 import org.gradle.api.artifacts.DependenciesMetadata
 import org.gradle.api.attributes.Attribute
-import org.gradle.api.internal.DocumentationRegistry
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
-import org.gradle.api.internal.artifacts.JavaEcosystemSupport
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
-import org.gradle.api.internal.artifacts.dsl.dependencies.GradlePluginVariantsSupport
 import org.gradle.api.internal.artifacts.repositories.resolver.DependencyConstraintMetadataImpl
 import org.gradle.api.internal.artifacts.repositories.resolver.DirectDependencyMetadataImpl
-import org.gradle.api.internal.attributes.DefaultAttributesSchema
 import org.gradle.api.internal.attributes.ImmutableAttributes
+import org.gradle.api.internal.attributes.immutable.ImmutableAttributesSchema
 import org.gradle.api.internal.notations.DependencyMetadataNotationParser
-import org.gradle.internal.component.ResolutionFailureHandler
 import org.gradle.internal.component.external.descriptor.MavenScope
 import org.gradle.internal.component.external.model.ivy.IvyDependencyDescriptor
 import org.gradle.internal.component.external.model.maven.MavenDependencyDescriptor
 import org.gradle.internal.component.external.model.maven.MavenDependencyType
 import org.gradle.internal.component.model.GraphVariantSelector
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata
-import org.gradle.internal.component.model.VariantGraphResolveMetadata
+import org.gradle.internal.component.model.VariantGraphResolveState
 import org.gradle.util.AttributeTestUtil
-import org.gradle.util.SnapshotTestUtil
 import org.gradle.util.TestUtil
 import org.gradle.util.internal.SimpleMapInterner
 import spock.lang.Shared
@@ -54,24 +49,21 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
     def notationParser = DependencyMetadataNotationParser.parser(instantiator, DirectDependencyMetadataImpl, SimpleMapInterner.notThreadSafe())
     def constraintNotationParser = DependencyMetadataNotationParser.parser(instantiator, DependencyConstraintMetadataImpl, SimpleMapInterner.notThreadSafe())
 
-    @Shared versionIdentifier = new DefaultModuleVersionIdentifier("org.test", "producer", "1.0")
-    @Shared componentIdentifier = DefaultModuleComponentIdentifier.newId(versionIdentifier)
-    @Shared attributes = AttributeTestUtil.attributesFactory().of(Attribute.of("someAttribute", String), "someValue")
-    @Shared schema = createSchema()
-    @Shared mavenMetadataFactory = DependencyManagementTestUtil.mavenMetadataFactory()
-    @Shared ivyMetadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
-    @Shared defaultVariant
+    @Shared
+        versionIdentifier = new DefaultModuleVersionIdentifier("org.test", "producer", "1.0")
+    @Shared
+        componentIdentifier = DefaultModuleComponentIdentifier.newId(versionIdentifier)
+    @Shared
+        attributes = AttributeTestUtil.attributesFactory().of(Attribute.of("someAttribute", String), "someValue")
+    @Shared
+        mavenMetadataFactory = DependencyManagementTestUtil.mavenMetadataFactory()
+    @Shared
+        ivyMetadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
+    @Shared
+        MutableComponentVariant defaultVariant
 
     protected static <T> VariantMetadataRules.VariantAction<T> variantAction(String variantName, Action<? super T> action) {
         new VariantMetadataRules.VariantAction<T>(variantName, action)
-    }
-
-    private DefaultAttributesSchema createSchema() {
-        def schema = new DefaultAttributesSchema(TestUtil.instantiatorFactory(), SnapshotTestUtil.isolatableFactory())
-        DependencyManagementTestUtil.platformSupport().configureSchema(schema)
-        GradlePluginVariantsSupport.configureSchema(schema)
-        JavaEcosystemSupport.configureSchema(schema, TestUtil.objectFactory())
-        schema
     }
 
     abstract boolean addAllDependenciesAsConstraints()
@@ -110,7 +102,7 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
             if (addAllDependenciesAsConstraints()) {
                 defaultVariant.addDependencyConstraint("org.test", name, new DefaultMutableVersionConstraint("1.0"), null, ImmutableAttributes.EMPTY)
             } else {
-                defaultVariant.addDependency("org.test", name, new DefaultMutableVersionConstraint("1.0"), [], null, ImmutableAttributes.EMPTY, [], false, null)
+                defaultVariant.addDependency("org.test", name, new DefaultMutableVersionConstraint("1.0"), [], null, ImmutableAttributes.EMPTY, [] as Set, false, null)
             }
         }
         metadata
@@ -128,15 +120,15 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
         0 * rule.execute(_)
 
         when:
-        selectTargetConfigurationMetadata(metadata).dependencies
+        selectTargetConfiguration(metadata).dependencies
 
         then:
         1 * rule.execute(_)
 
         when:
-        selectTargetConfigurationMetadata(metadata).dependencies
-        selectTargetConfigurationMetadata(metadata).dependencies
-        selectTargetConfigurationMetadata(metadata).dependencies
+        selectTargetConfiguration(metadata).dependencies
+        selectTargetConfiguration(metadata).dependencies
+        selectTargetConfiguration(metadata).dependencies
 
         then:
         0 * rule.execute(_)
@@ -154,7 +146,7 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
 
         when:
         doAddDependencyMetadataRule(metadataImplementation, "anotherVariant", rule)
-        selectTargetConfigurationMetadata(metadataImplementation).dependencies
+        selectTargetConfiguration(metadataImplementation).dependencies
 
         then:
         0 * rule.execute(_)
@@ -180,7 +172,7 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
 
         when:
         doAddDependencyMetadataRule(metadataImplementation, rule)
-        def dependencies = selectTargetConfigurationMetadata(metadataImplementation).dependencies
+        def dependencies = selectTargetConfiguration(metadataImplementation).dependencies
 
         then:
         if (supportedInMetadata(metadataType)) {
@@ -214,7 +206,7 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
 
         when:
         doAddDependencyMetadataRule(metadataImplementation, rule)
-        def dependencies = selectTargetConfigurationMetadata(metadataImplementation).dependencies
+        def dependencies = selectTargetConfiguration(metadataImplementation).dependencies
 
         then:
         if (supportedInMetadata(metadataType)) {
@@ -241,10 +233,10 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
 
         when:
         doAddDependencyMetadataRule(metadataImplementation, rule)
-        def dependencies = selectTargetConfigurationMetadata(metadataImplementation).dependencies
+        def dependencies = selectTargetConfiguration(metadataImplementation).dependencies
 
         then:
-        dependencies.collect { it.selector } == [newSelector(DefaultModuleIdentifier.newId("org.test", "added"), "1.0") ]
+        dependencies.collect { it.selector } == [newSelector(DefaultModuleIdentifier.newId("org.test", "added"), "1.0")]
 
         where:
         metadataType | metadataImplementation
@@ -262,7 +254,7 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
 
         when:
         doAddDependencyMetadataRule(metadataImplementation, rule)
-        def dependencies = selectTargetConfigurationMetadata(metadataImplementation).dependencies
+        def dependencies = selectTargetConfiguration(metadataImplementation).dependencies
 
         then:
         dependencies.empty
@@ -274,19 +266,18 @@ abstract class AbstractDependencyMetadataRulesTest extends Specification {
         "gradle"     | gradleComponentMetadata("toRemove")
     }
 
-    VariantGraphResolveMetadata selectTargetConfigurationMetadata(MutableModuleComponentResolveMetadata targetComponent) {
-        return selectTargetConfigurationMetadata(targetComponent.asImmutable())
+    VariantGraphResolveState selectTargetConfiguration(MutableModuleComponentResolveMetadata targetComponent) {
+        return selectTargetConfiguration(targetComponent.asImmutable())
     }
 
-    VariantGraphResolveMetadata selectTargetConfigurationMetadata(ModuleComponentResolveMetadata immutable) {
+    VariantGraphResolveState selectTargetConfiguration(ModuleComponentResolveMetadata immutable) {
         def componentIdentifier = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("org.test", "consumer"), "1.0")
         def consumerIdentifier = DefaultModuleVersionIdentifier.newId(componentIdentifier)
         def componentSelector = newSelector(consumerIdentifier.module, new DefaultMutableVersionConstraint(consumerIdentifier.version))
-        def consumer = new LocalComponentDependencyMetadata(componentSelector, ImmutableAttributes.EMPTY, null, [] as List, [], false, false, true, false, false, null)
+        def consumer = new LocalComponentDependencyMetadata(componentSelector, null, [] as List, [], false, false, true, false, false, null)
         def state = DependencyManagementTestUtil.modelGraphResolveFactory().stateFor(immutable)
-        def documentationRegistry = new DocumentationRegistry()
-        def variantSelector = new GraphVariantSelector(new ResolutionFailureHandler(documentationRegistry))
+        def variantSelector = new GraphVariantSelector(AttributeTestUtil.services(), DependencyManagementTestUtil.newFailureHandler())
 
-        return consumer.selectVariants(variantSelector, attributes, state, schema, [] as Set).variants[0].metadata
+        return consumer.selectVariants(variantSelector, attributes, state, ImmutableAttributesSchema.EMPTY, [] as Set).variants[0]
     }
 }

@@ -23,7 +23,6 @@ package org.gradle.tooling;
  * @since 1.8
  */
 public interface BuildActionExecuter<T> extends ConfigurableLauncher<BuildActionExecuter<T>> {
-
     /**
      * Builder for a build action that hooks into different phases of the build.
      *
@@ -70,6 +69,14 @@ public interface BuildActionExecuter<T> extends ConfigurableLauncher<BuildAction
     }
 
     /**
+     * Sets the listener to use to streamed values sent from the action via {@link BuildController#send(Object)}.
+     * Replaces the current listener.
+     *
+     * @since 8.6
+     */
+    void setStreamedValueListener(StreamedValueListener listener);
+
+    /**
      * <p>Specifies the tasks to execute before executing the BuildAction.</p>
      *
      * <p>If not configured or a null array, then no tasks will be executed. If an empty array, the default tasks for the build will be executed.</p>
@@ -101,8 +108,7 @@ public interface BuildActionExecuter<T> extends ConfigurableLauncher<BuildAction
      * Runs the action, blocking until its result is available.
      *
      * @throws UnsupportedVersionException When the target Gradle version does not support build action execution.
-     * @throws org.gradle.tooling.exceptions.UnsupportedOperationConfigurationException
-     *          When the target Gradle version does not support some requested configuration option.
+     * @throws org.gradle.tooling.exceptions.UnsupportedOperationConfigurationException When the target Gradle version does not support some requested configuration option.
      * @throws org.gradle.tooling.exceptions.UnsupportedBuildArgumentException When there is a problem with build arguments provided by {@link #withArguments(String...)}.
      * @throws BuildActionFailureException When the build action fails with an exception.
      * @throws BuildCancelledException When the operation was cancelled before it completed successfully.

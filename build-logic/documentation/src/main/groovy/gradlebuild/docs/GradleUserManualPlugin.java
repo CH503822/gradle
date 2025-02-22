@@ -34,6 +34,7 @@ import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskInputs;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
+import org.ysb33r.grolifant.api.core.jvm.ExecutionMode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -114,6 +115,7 @@ public class GradleUserManualPlugin implements Plugin<Project> {
                 return;
             }
 
+            task.setExecutionMode(ExecutionMode.OUT_OF_PROCESS);
             task.outputOptions(options -> {
                 options.setSeparateOutputDirs(false);
                 options.setBackends(singletonList("html5"));
@@ -236,6 +238,8 @@ public class GradleUserManualPlugin implements Plugin<Project> {
             task.outputOptions(options -> options.setBackends(singletonList("pdf")));
             // TODO: This breaks the provider
             task.setOutputDir(extension.getUserManual().getStagingRoot().dir("render-single-pdf").get().getAsFile());
+            // The PDF rendering needs at least 2GB of heap
+            task.jvm(options -> options.setMaxHeapSize("3g"));
         });
 
         TaskProvider<AsciidoctorTask> userguideMultiPage = tasks.register("userguideMultiPage", AsciidoctorTask.class, task -> {
@@ -329,9 +333,12 @@ public class GradleUserManualPlugin implements Plugin<Project> {
     private void checkXrefLinksInUserManualAreValid(ProjectLayout layout, TaskContainer tasks, GradleDocumentationExtension extension) {
         TaskProvider<FindBrokenInternalLinks> checkDeadInternalLinks = tasks.register("checkDeadInternalLinks", FindBrokenInternalLinks.class, task -> {
             task.getReportFile().convention(layout.getBuildDirectory().file("reports/dead-internal-links.txt"));
-            task.getDocumentationRoot().convention(extension.getUserManual().getStagedDocumentation());
+            task.getDocumentationRoot().convention(extension.getUserManual().getStagedDocumentation()); // working/usermanual/raw/
             task.getJavadocRoot().convention(layout.getBuildDirectory().dir("javadoc"));
+            task.getReleaseNotesFile().convention(layout.getProjectDirectory().file("src/docs/release/notes.md"));
+            task.getSamplesRoot().convention(layout.getBuildDirectory().dir("working/samples/docs"));
             task.dependsOn(tasks.named("javadocAll"));
+            task.dependsOn(tasks.named("assembleSamples"));
         });
 
         tasks.named(LifecycleBasePlugin.CHECK_TASK_NAME, task -> task.dependsOn(checkDeadInternalLinks));

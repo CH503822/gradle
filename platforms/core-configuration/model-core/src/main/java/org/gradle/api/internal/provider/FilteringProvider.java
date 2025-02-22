@@ -18,6 +18,7 @@ package org.gradle.api.internal.provider;
 
 import org.gradle.api.InvalidUserCodeException;
 import org.gradle.api.specs.Spec;
+import org.gradle.internal.evaluation.EvaluationScopeContext;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -46,33 +47,39 @@ public class FilteringProvider<T> extends AbstractMinimalProvider<T> {
 
     @Override
     public ValueProducer getProducer() {
-        return provider.getProducer();
+        try (EvaluationScopeContext ignored = openScope()) {
+            return provider.getProducer();
+        }
     }
 
     @Override
     public ExecutionTimeValue<? extends T> calculateExecutionTimeValue() {
-        ExecutionTimeValue<? extends T> value = provider.calculateExecutionTimeValue();
-        if (value.isMissing()) {
-            return value;
-        }
-        if (value.hasChangingContent()) {
-            // Need the value contents in order to transform it to produce the value of this provider,
-            // so if the value or its contents are built by tasks, the value of this provider is also built by tasks
-            return ExecutionTimeValue.changingValue(new FilteringProvider<>(value.toProvider(), spec));
-        }
+        try (EvaluationScopeContext context = openScope()) {
+            ExecutionTimeValue<? extends T> value = provider.calculateExecutionTimeValue();
+            if (value.isMissing()) {
+                return value;
+            }
+            if (value.hasChangingContent()) {
+                // Need the value contents in order to transform it to produce the value of this provider,
+                // so if the value or its contents are built by tasks, the value of this provider is also built by tasks
+                return ExecutionTimeValue.changingValue(new FilteringProvider<>(value.toProvider(), spec));
+            }
 
-        return ExecutionTimeValue.value(filterValue(value.toValue()));
+            return ExecutionTimeValue.value(filterValue(context, value.toValue()));
+        }
     }
 
     @Override
     protected Value<? extends T> calculateOwnValue(ValueConsumer consumer) {
-        beforeRead();
-        Value<? extends T> value = provider.calculateValue(consumer);
-        return filterValue(value);
+        try (EvaluationScopeContext context = openScope()) {
+            beforeRead(context);
+            Value<? extends T> value = provider.calculateValue(consumer);
+            return filterValue(context, value);
+        }
     }
 
     @Nonnull
-    protected Value<? extends T> filterValue(Value<? extends T> value) {
+    protected Value<? extends T> filterValue(@SuppressWarnings("unused") EvaluationScopeContext context, Value<? extends T> value) {
         if (value.isMissing()) {
             return value.asType();
         }
@@ -84,7 +91,7 @@ public class FilteringProvider<T> extends AbstractMinimalProvider<T> {
         }
     }
 
-    protected void beforeRead() {
+    protected void beforeRead(@SuppressWarnings("unused") EvaluationScopeContext context) {
         provider.getProducer().visitContentProducerTasks(producer -> {
             if (!producer.getState().getExecuted()) {
                 throw new InvalidUserCodeException(
@@ -95,7 +102,7 @@ public class FilteringProvider<T> extends AbstractMinimalProvider<T> {
     }
 
     @Override
-    public String toString() {
+    protected String toStringNoReentrance() {
         return "filter(" + (getType() == null ? "" : getType().getName() + " ") + provider + ")";
     }
 }

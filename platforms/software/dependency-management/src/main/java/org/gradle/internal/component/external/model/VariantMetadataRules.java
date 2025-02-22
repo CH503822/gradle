@@ -16,7 +16,6 @@
 package org.gradle.internal.component.external.model;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.DependencyConstraintMetadata;
 import org.gradle.api.artifacts.DependencyConstraintsMetadata;
@@ -28,8 +27,8 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.attributes.AttributeContainer;
 import org.gradle.api.capabilities.MutableCapabilitiesMetadata;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
+import org.gradle.api.internal.attributes.AttributesFactory;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
 import org.gradle.internal.component.model.ComponentArtifactMetadata;
 import org.gradle.internal.component.model.DependencyMetadataRules;
 import org.gradle.internal.component.model.VariantAttributesRules;
@@ -45,9 +44,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class VariantMetadataRules {
-    private final ImmutableAttributesFactory attributesFactory;
+    private final AttributesFactory attributesFactory;
     private final ModuleVersionIdentifier moduleVersionId;
-    private final List<AdditionalVariant> additionalVariants = Lists.newArrayList();
+    private final List<AdditionalVariant> additionalVariants = new ArrayList<>();
 
     private DependencyMetadataRules dependencyMetadataRules;
     private VariantAttributesRules variantAttributesRules;
@@ -60,11 +59,11 @@ public class VariantMetadataRules {
     // matching, so this map must support concurrent modification.
     private final Map<String, AttributeContainerInternal> variantAttributes = new ConcurrentHashMap<>();
 
-    public VariantMetadataRules(ImmutableAttributesFactory attributesFactory, ModuleVersionIdentifier moduleVersionId) {
+    public VariantMetadataRules(AttributesFactory attributesFactory, ModuleVersionIdentifier moduleVersionId) {
         this(attributesFactory, moduleVersionId, attributesFactory.mutable());
     }
 
-    private VariantMetadataRules(ImmutableAttributesFactory attributesFactory, ModuleVersionIdentifier moduleVersionId, AttributeContainerInternal baseAttributes) {
+    private VariantMetadataRules(AttributesFactory attributesFactory, ModuleVersionIdentifier moduleVersionId, AttributeContainerInternal baseAttributes) {
         this.attributesFactory = attributesFactory;
         this.moduleVersionId = moduleVersionId;
         this.baseAttributes = baseAttributes;
@@ -149,7 +148,7 @@ public class VariantMetadataRules {
         dependencyMetadataRules.addDependencyConstraintAction(action);
     }
 
-    public void addAttributesAction(ImmutableAttributesFactory attributesFactory, VariantAction<? super AttributeContainer> action) {
+    public void addAttributesAction(AttributesFactory attributesFactory, VariantAction<? super AttributeContainer> action) {
         if (variantAttributesRules == null) {
             variantAttributesRules = new VariantAttributesRules(attributesFactory);
         }
@@ -244,7 +243,7 @@ public class VariantMetadataRules {
         }
 
         @Override
-        public void addAttributesAction(ImmutableAttributesFactory attributesFactory, VariantAction<? super AttributeContainer> action) {
+        public void addAttributesAction(AttributesFactory attributesFactory, VariantAction<? super AttributeContainer> action) {
             throw new UnsupportedOperationException("You are probably trying to add a variant attribute to something that wasn't supposed to be mutable");
         }
 

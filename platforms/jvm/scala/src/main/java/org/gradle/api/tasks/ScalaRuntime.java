@@ -60,6 +60,8 @@ import java.io.File;
  */
 public abstract class ScalaRuntime {
 
+    // TODO: Deprecate this class in 9.x when we de-incubate ScalaPluginExtension#getScalaVersion()
+
     private final Project project;
     private final JvmPluginServices jvmPluginServices;
 
@@ -197,7 +199,6 @@ public abstract class ScalaRuntime {
     /**
      * Determines Scala compiler jar to download.
      *
-     * @param scalaVersion version of scala to download the compiler for
      * @param scalaVersion version of scala to download the compiler for
      * @return compiler dependency to download
      */

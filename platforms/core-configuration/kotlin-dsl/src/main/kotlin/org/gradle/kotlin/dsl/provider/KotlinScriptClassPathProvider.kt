@@ -17,7 +17,7 @@
 package org.gradle.kotlin.dsl.provider
 
 import org.gradle.api.Project
-import org.gradle.api.artifacts.SelfResolvingDependency
+import org.gradle.api.artifacts.FileCollectionDependency
 import org.gradle.api.file.FileCollection
 import org.gradle.api.internal.ClassPathRegistry
 import org.gradle.api.internal.artifacts.dsl.dependencies.DependencyFactoryInternal
@@ -27,6 +27,8 @@ import org.gradle.api.internal.initialization.ClassLoaderScope
 import org.gradle.internal.classloader.ClassLoaderVisitor
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.classpath.DefaultClassPath
+import org.gradle.internal.service.scopes.Scope
+import org.gradle.internal.service.scopes.ServiceScope
 import org.gradle.kotlin.dsl.support.isGradleKotlinDslJar
 import org.gradle.kotlin.dsl.support.isGradleKotlinDslJarName
 import org.gradle.kotlin.dsl.support.serviceOf
@@ -65,6 +67,7 @@ internal
 typealias JarsProvider = () -> Collection<File>
 
 
+@ServiceScope(Scope.Build::class)
 class KotlinScriptClassPathProvider(
     private val moduleRegistry: ModuleRegistry,
     private val classPathRegistry: ClassPathRegistry,
@@ -148,7 +151,7 @@ class KotlinScriptClassPathProvider(
 
 internal
 fun gradleApiJarsProviderFor(dependencyFactory: DependencyFactoryInternal): JarsProvider =
-    { (dependencyFactory.gradleApi() as SelfResolvingDependency).resolve() }
+    { (dependencyFactory.gradleApi() as FileCollectionDependency).files.files }
 
 
 private
@@ -202,7 +205,7 @@ private
 fun toURI(url: URL): URI =
     try {
         url.toURI()
-    } catch (e: URISyntaxException) {
+    } catch (_: URISyntaxException) {
         URL(
             url.protocol,
             url.host,

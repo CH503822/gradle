@@ -16,7 +16,6 @@
 
 package org.gradle.buildinit.plugins.internal;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.gradle.api.UncheckedIOException;
 
@@ -26,6 +25,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -68,7 +68,7 @@ public class GitIgnoreGenerator implements BuildContentGenerator {
     }
 
     private static List<String> withComment(String entry) {
-        List<String> result = Lists.newArrayList();
+        List<String> result = new ArrayList<>();
         if (entry.startsWith(".gradle")) {
             result.add("# Ignore Gradle project-specific cache directory");
         } else if (entry.startsWith("build")) {
@@ -80,7 +80,8 @@ public class GitIgnoreGenerator implements BuildContentGenerator {
     }
 
     private static List<String> withSeparator(List<String> entry) {
-        List<String> result = Lists.newArrayList("");
+        List<String> result = new ArrayList<>(1 + entry.size());
+        result.add("");
         result.addAll(entry);
         return result;
     }

@@ -27,9 +27,7 @@ import org.gradle.internal.watch.registry.WatchMode;
 import org.gradle.internal.watch.vfs.BuildFinishedFileSystemWatchingBuildOperationType;
 import org.gradle.internal.watch.vfs.BuildLifecycleAwareVirtualFileSystem;
 import org.gradle.internal.watch.vfs.BuildStartedFileSystemWatchingBuildOperationType;
-import org.gradle.internal.watch.vfs.FileSystemWatchingInformation;
 import org.gradle.internal.watch.vfs.VfsLogging;
-import org.gradle.internal.watch.vfs.WatchLogging;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +36,7 @@ import java.io.File;
 /**
  * A {@link VirtualFileSystem} which is not able to register any watches.
  */
-public class WatchingNotSupportedVirtualFileSystem extends AbstractVirtualFileSystem implements BuildLifecycleAwareVirtualFileSystem, FileSystemWatchingInformation {
+public class WatchingNotSupportedVirtualFileSystem extends AbstractVirtualFileSystem implements BuildLifecycleAwareVirtualFileSystem {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WatchingNotSupportedVirtualFileSystem.class);
 
@@ -55,7 +53,6 @@ public class WatchingNotSupportedVirtualFileSystem extends AbstractVirtualFileSy
     public boolean afterBuildStarted(
         WatchMode watchMode,
         VfsLogging vfsLogging,
-        WatchLogging watchLogging,
         BuildOperationRunner buildOperationRunner
     ) {
         if (watchMode == WatchMode.ENABLED) {
@@ -85,7 +82,6 @@ public class WatchingNotSupportedVirtualFileSystem extends AbstractVirtualFileSy
     public void beforeBuildFinished(
         WatchMode watchMode,
         VfsLogging vfsLogging,
-        WatchLogging watchLogging,
         BuildOperationRunner buildOperationRunner,
         int maximumNumberOfWatchedHierarchies
     ) {
@@ -102,6 +98,10 @@ public class WatchingNotSupportedVirtualFileSystem extends AbstractVirtualFileSy
                     .details(BuildFinishedFileSystemWatchingBuildOperationType.Details.INSTANCE);
             }
         }));
+    }
+
+    @Override
+    public void afterBuildFinished() {
     }
 
     @Override

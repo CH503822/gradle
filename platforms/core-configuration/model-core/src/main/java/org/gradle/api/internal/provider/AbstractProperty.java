@@ -17,16 +17,33 @@
 package org.gradle.api.internal.provider;
 
 import org.gradle.api.Task;
+import org.gradle.api.provider.SupportsConvention;
 import org.gradle.internal.Describables;
 import org.gradle.internal.DisplayName;
 import org.gradle.internal.UncheckedException;
+import org.gradle.internal.evaluation.EvaluationScopeContext;
 import org.gradle.internal.exceptions.Contextual;
 import org.gradle.internal.logging.text.TreeFormatter;
 import org.gradle.internal.state.ModelObject;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ConcurrentModificationException;
 
+/**
+ * The base implementation for all properties in Gradle.
+ * <p>
+ *     A property is a provider where the value is configurable.
+ * </p>
+ * <p>
+ *     A property's value is not stored in the property itself,
+ *     but computed by some {@link ValueSupplier}, which
+ *     provides the basic machinery for lazy evaluation.
+ * </p>
+ *
+ * @param <T> the type of the value this property provides
+ * @param <S> the type of value supplier that actually provides the value for this property
+ */
 public abstract class AbstractProperty<T, S extends ValueSupplier> extends AbstractMinimalProvider<T> implements PropertyInternal<T> {
     private static final DisplayName DEFAULT_DISPLAY_NAME = Describables.of("this property");
     private static final DisplayName DEFAULT_VALIDATION_DISPLAY_NAME = Describables.of("a property");
@@ -49,25 +66,27 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
         init(initialValue, initialValue);
     }
 
-    /**
-     * A simple getter that checks if this property has been finalized.
-     *
-     * @return {@code true} if this property has been finalized, {@code false} otherwise
-     */
+    @Override
     public boolean isFinalized() {
         return state.isFinalized();
     }
 
+    protected boolean isExplicit() {
+        return state.isExplicit();
+    }
+
     @Override
     public boolean calculatePresence(ValueConsumer consumer) {
-        beforeRead(consumer);
-        try {
-            return getSupplier().calculatePresence(consumer);
-        } catch (Exception e) {
-            if (displayName != null) {
-                throw new PropertyQueryException(String.format("Failed to query the value of %s.", displayName), e);
-            } else {
-                throw UncheckedException.throwAsUncheckedException(e);
+        try (EvaluationScopeContext context = openScope()) {
+            beforeRead(context, consumer); // may throw its own exception, which should not be wrapped.
+            try {
+                return getSupplier(context).calculatePresence(consumer);
+            } catch (Exception e) {
+                if (displayName != null) {
+                    throw new PropertyQueryException(String.format("Failed to query the value of %s.", displayName), e);
+                } else {
+                    throw UncheckedException.throwAsUncheckedException(e);
+                }
             }
         }
     }
@@ -119,25 +138,38 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
         }
     }
 
-    protected S getSupplier() {
+    protected final S getSupplier(@SuppressWarnings("unused") EvaluationScopeContext context) {
+        // context serves as a token here to ensure that the scope is opened.
         return value;
     }
 
+    protected S getConventionSupplier() {
+        return state.convention();
+    }
+
+    protected final String describeValue() {
+        return value.toString();
+    }
+
     protected Value<? extends T> calculateOwnValueNoProducer(ValueConsumer consumer) {
-        beforeReadNoProducer(consumer);
-        return doCalculateValue(consumer);
+        try (EvaluationScopeContext context = openScope()) {
+            beforeReadNoProducer(context, consumer);
+            return doCalculateValue(context, consumer);
+        }
     }
 
     @Override
     protected Value<? extends T> calculateOwnValue(ValueConsumer consumer) {
-        beforeRead(consumer);
-        return doCalculateValue(consumer);
+        try (EvaluationScopeContext context = openScope()) {
+            beforeRead(context, consumer);
+            return doCalculateValue(context, consumer);
+        }
     }
 
     @Nonnull
-    private Value<? extends T> doCalculateValue(ValueConsumer consumer) {
+    private Value<? extends T> doCalculateValue(EvaluationScopeContext context, ValueConsumer consumer) {
         try {
-            return calculateValueFrom(value, consumer);
+            return calculateValueFrom(context, value, consumer);
         } catch (Exception e) {
             if (displayName != null) {
                 throw new PropertyQueryException(String.format("Failed to query the value of %s.", displayName), e);
@@ -147,19 +179,35 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
         }
     }
 
-    protected abstract Value<? extends T> calculateValueFrom(S value, ValueConsumer consumer);
+    /**
+     * Throws a {@link ConcurrentModificationException} with text describing data corruption because of unsafe property access.
+     *
+     * @param reason the (optional) reason indicating the detected corruption
+     * @return nothing (it throws), but you can use this method in {@code throw} statement to appease the compiler
+     */
+    protected ConcurrentModificationException failWithCorruptedStateException(@Nullable Throwable reason) {
+        throw new ConcurrentModificationException(
+            "State of " + getDisplayName().getDisplayName() + " is corrupted. " +
+                "This may be caused by unsafe concurrent modifications with parallel configuration or execution enabled.",
+            reason
+        );
+    }
+
+    protected abstract Value<? extends T> calculateValueFrom(EvaluationScopeContext context, S value, ValueConsumer consumer);
 
     @Override
     public ExecutionTimeValue<? extends T> calculateExecutionTimeValue() {
-        ExecutionTimeValue<? extends T> value = calculateOwnExecutionTimeValue(this.value);
-        if (getProducerTask() == null) {
-            return value;
-        } else {
-            return value.withChangingContent();
+        try (EvaluationScopeContext context = openScope()) {
+            ExecutionTimeValue<? extends T> value = calculateOwnExecutionTimeValue(context, this.value);
+            if (getProducerTask() == null) {
+                return value;
+            } else {
+                return value.withChangingContent();
+            }
         }
     }
 
-    protected abstract ExecutionTimeValue<? extends T> calculateOwnExecutionTimeValue(S value);
+    protected abstract ExecutionTimeValue<? extends T> calculateOwnExecutionTimeValue(EvaluationScopeContext context, S value);
 
     /**
      * Returns a diagnostic string describing the current source of value of this property. Should not realize the value.
@@ -168,7 +216,7 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
 
     // This method is final - implement describeContents() instead
     @Override
-    public final String toString() {
+    protected final String toStringNoReentrance() {
         if (displayName != null) {
             return displayName.toString();
         } else {
@@ -182,14 +230,18 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
         if (task != null) {
             return ValueProducer.task(task);
         } else {
-            return getSupplier().getProducer();
+            try (EvaluationScopeContext context = openScope()) {
+                return getSupplier(context).getProducer();
+            }
         }
     }
 
     @Override
     public void finalizeValue() {
         if (state.shouldFinalize(this.getDisplayName(), producer)) {
-            finalizeNow(ValueConsumer.IgnoreUnsafeRead);
+            try (EvaluationScopeContext context = openScope()) {
+                finalizeNow(context, ValueConsumer.IgnoreUnsafeRead);
+            }
         }
     }
 
@@ -205,14 +257,26 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
 
     @Override
     public void implicitFinalizeValue() {
-        state.disallowChangesAndFinalizeOnNextGet();
+        if (state.isUpgradedPropertyValue()) {
+            // Upgraded properties should not be finalized to simplify migration.
+            // This behaviour should be removed with Gradle 10.
+            state.warnOnUpgradedPropertyValueChanges();
+        } else {
+            state.disallowChangesAndFinalizeOnNextGet();
+        }
     }
 
+    @Override
+    public void markAsUpgradedProperty() {
+        state.markAsUpgradedPropertyValue();
+    }
+
+    @Override
     public void disallowUnsafeRead() {
         state.disallowUnsafeRead();
     }
 
-    protected abstract S finalValue(S value, ValueConsumer consumer);
+    protected abstract S finalValue(EvaluationScopeContext context, S value, ValueConsumer consumer);
 
     protected void setSupplier(S supplier) {
         assertCanMutate();
@@ -227,21 +291,21 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
     /**
      * Call prior to reading the value of this property.
      */
-    protected void beforeRead(ValueConsumer consumer) {
-        beforeRead(producer, consumer);
+    protected void beforeRead(EvaluationScopeContext context, ValueConsumer consumer) {
+        beforeRead(context, producer, consumer);
     }
 
-    protected void beforeReadNoProducer(ValueConsumer consumer) {
-        beforeRead(null, consumer);
+    protected void beforeReadNoProducer(EvaluationScopeContext context, ValueConsumer consumer) {
+        beforeRead(context, null, consumer);
     }
 
-    private void beforeRead(@Nullable ModelObject effectiveProducer, ValueConsumer consumer) {
-        state.finalizeOnReadIfNeeded(this.getDisplayName(), effectiveProducer, consumer, this::finalizeNow);
+    private void beforeRead(EvaluationScopeContext context, @Nullable ModelObject effectiveProducer, ValueConsumer consumer) {
+        state.finalizeOnReadIfNeeded(this.getDisplayName(), effectiveProducer, consumer, effectiveConsumer -> finalizeNow(context, effectiveConsumer));
     }
 
-    private void finalizeNow(ValueConsumer consumer) {
+    private void finalizeNow(EvaluationScopeContext context, ValueConsumer consumer) {
         try {
-            value = finalValue(value, state.forUpstream(consumer));
+            value = finalValue(context, value, state.forUpstream(consumer));
         } catch (Exception e) {
             if (displayName != null) {
                 throw new PropertyQueryException(String.format("Failed to calculate the value of %s.", displayName), e);
@@ -264,8 +328,71 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
      */
     protected void discardValue() {
         assertCanMutate();
-        value = state.implicitValue();
+        if (isDefaultConvention()) {
+            // special case: discarding value without a convention restores the initial state
+            state.implicitValue(getDefaultConvention());
+            value = getDefaultValue();
+        } else {
+            // otherwise, the convention will become the new value
+            value = state.implicitValue(state.convention());
+        }
     }
+
+    /**
+     * Discards the convention of this property.
+     */
+    protected void discardConvention() {
+        assertCanMutate();
+        value = state.applyConvention(value, getDefaultConvention());
+    }
+
+    @Override
+    public SupportsConvention unsetConvention() {
+        discardConvention();
+        return this;
+    }
+
+    @Override
+    public SupportsConvention unset() {
+        discardValue();
+        return this;
+    }
+
+    /**
+     * Sets the value of the property to the current convention value, replacing whatever explicit value the property already had.
+     *
+     * If the property has no convention set at the time this method is invoked,
+     * the effect of invoking it is similar to invoking {@link #unset()}.
+     */
+    protected SupportsConvention setToConvention() {
+        assertCanMutate();
+        this.value = state.setToConvention();
+        return this;
+    }
+
+    /**
+     * Sets the value of the property to the current convention value, if an explicit
+     * value has not been set yet.
+     *
+     * If the property has no convention set at the time this method is invoked,
+     * or if an explicit value has already been set, it has no effect.
+     */
+    protected SupportsConvention setToConventionIfUnset() {
+        assertCanMutate();
+        if (!isDefaultConvention()) {
+            this.value = state.setToConventionIfUnset(value);
+        }
+        return this;
+    }
+
+    protected abstract S getDefaultValue();
+
+    protected abstract S getDefaultConvention();
+
+    /**
+     * Is convention set to the initial convention value?
+     */
+    protected abstract boolean isDefaultConvention();
 
     protected void assertCanMutate() {
         state.beforeMutate(this.getDisplayName());
@@ -312,4 +439,57 @@ public abstract class AbstractProperty<T, S extends ValueSupplier> extends Abstr
         }
     }
 
+    /**
+     * Creates a shallow copy of this property. Further changes to this property (via {@code set(...)}, or {@code convention(Object...)}) do not
+     * change the copy. However, the copy still reflects changes to the underlying providers that constitute this property. Consider the following snippet:
+     * <pre>
+     *     def upstream = objects.property(String).value("foo")
+     *     def property = objects.property(String).value(upstream)
+     *     def copy = property.shallowCopy()
+     *     property.set("bar")  // does not affect contents of the copy
+     *     upstream.set("qux")  // does affect the content of the copy
+     *
+     *     println(copy.get())  // prints qux
+     * </pre>
+     * <p>
+     * The copy doesn't share the producer of this property, but inherits producers of the current property value.
+     *
+     * @return the shallow copy of this property
+     */
+    public ProviderInternal<T> shallowCopy() {
+        return new ShallowCopyProvider();
+    }
+
+    private class ShallowCopyProvider extends AbstractMinimalProvider<T> {
+        // the value of "value" is immutable but the field is not, so copy it
+        // (but use a different owner)
+        private final S copiedValue = value;
+
+        @Override
+        public ValueProducer getProducer() {
+            try (EvaluationScopeContext ignored = openScope()) {
+                return copiedValue.getProducer();
+            }
+        }
+
+        @Override
+        public ExecutionTimeValue<? extends T> calculateExecutionTimeValue() {
+            try (EvaluationScopeContext context = openScope()) {
+                return calculateOwnExecutionTimeValue(context, copiedValue);
+            }
+        }
+
+        @Override
+        protected Value<? extends T> calculateOwnValue(ValueConsumer consumer) {
+            try (EvaluationScopeContext context = openScope()) {
+                return calculateValueFrom(context, copiedValue, consumer);
+            }
+        }
+
+        @Override
+        @Nullable
+        public Class<T> getType() {
+            return AbstractProperty.this.getType();
+        }
+    }
 }

@@ -20,10 +20,12 @@ import org.gradle.api.GradleException;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.tooling.CancellationToken;
+import org.gradle.tooling.StreamedValueListener;
 import org.gradle.tooling.events.OperationType;
 import org.gradle.tooling.events.ProgressListener;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
 import org.gradle.tooling.internal.consumer.CancellationTokenInternal;
+import org.gradle.tooling.internal.consumer.ConnectionConfigurationUtil;
 import org.gradle.tooling.internal.consumer.ConnectionParameters;
 import org.gradle.tooling.internal.gradle.TaskListingLaunchable;
 import org.gradle.tooling.internal.protocol.BuildParameters;
@@ -32,6 +34,7 @@ import org.gradle.tooling.internal.protocol.ProgressListenerVersion1;
 import org.gradle.tooling.model.Launchable;
 import org.gradle.tooling.model.Task;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -64,13 +67,16 @@ public class ConsumerOperationParameters implements BuildParameters {
         private Boolean colorOutput;
         private InputStream stdin;
         private File javaHome;
-        private List<String> jvmArguments;
+        private List<String> baseJvmArguments = null;
+        private List<String> additionalJvmArguments = null;
         private Map<String, String> envVariables;
         private List<String> arguments;
         private List<String> tasks;
         private List<InternalLaunchable> launchables;
         private ClassPath injectedPluginClasspath = ClassPath.EMPTY;
         private Map<String, String> systemProperties;
+        @Nullable
+        private StreamedValueListener streamedValueListener;
 
         private Builder() {
         }
@@ -111,13 +117,15 @@ public class ConsumerOperationParameters implements BuildParameters {
             return this;
         }
 
-        public Builder setJvmArguments(List<String> jvmArguments) {
-            this.jvmArguments = jvmArguments;
+        public Builder setBaseJvmArguments(@Nullable List<String> baseJvmArguments) {
+            if (baseJvmArguments != null) {
+                this.baseJvmArguments = new ArrayList<>(baseJvmArguments);
+            }
             return this;
         }
 
-        public Builder addJvmArguments(List<String> jvmArguments) {
-            this.jvmArguments = concat(this.jvmArguments, jvmArguments);
+        public Builder addJvmArguments(@Nullable List<String> jvmArguments) {
+            this.additionalJvmArguments = concat(this.additionalJvmArguments, jvmArguments);
             return this;
         }
 
@@ -131,9 +139,9 @@ public class ConsumerOperationParameters implements BuildParameters {
             return this;
         }
 
-        private static List<String> concat(List<String> first, List<String> second) {
+        private static List<String> concat(@Nullable List<String> first, @Nullable List<String> second) {
             List<String> result = new ArrayList<String>();
-            if (first  != null) {
+            if (first != null) {
                 result.addAll(first);
             }
             if (second != null) {
@@ -154,7 +162,7 @@ public class ConsumerOperationParameters implements BuildParameters {
 
         public Builder setLaunchables(Iterable<? extends Launchable> launchables) {
             Set<String> taskPaths = new LinkedHashSet<String>();
-            List<InternalLaunchable> launchablesParams = Lists.newArrayList();
+            List<InternalLaunchable> launchablesParams = new ArrayList<>();
             for (Launchable launchable : launchables) {
                 Object original = new ProtocolToModelAdapter().unpack(launchable);
                 if (original instanceof InternalLaunchable) {
@@ -207,13 +215,36 @@ public class ConsumerOperationParameters implements BuildParameters {
             this.cancellationToken = cancellationToken;
         }
 
+        public void setStreamedValueListener(StreamedValueListener streamedValueListener) {
+            this.streamedValueListener = streamedValueListener;
+        }
+
         public ConsumerOperationParameters build() {
             if (entryPoint == null) {
                 throw new IllegalStateException("No entry point specified.");
             }
 
-            return new ConsumerOperationParameters(entryPoint, parameters, stdout, stderr, colorOutput, stdin, javaHome, jvmArguments, envVariables, arguments, tasks, launchables, injectedPluginClasspath,
-                legacyProgressListeners, progressListeners, cancellationToken, systemProperties);
+            return new ConsumerOperationParameters(
+                entryPoint,
+                parameters,
+                stdout,
+                stderr,
+                colorOutput,
+                stdin,
+                javaHome,
+                baseJvmArguments,
+                additionalJvmArguments,
+                envVariables,
+                arguments,
+                tasks,
+                launchables,
+                injectedPluginClasspath,
+                legacyProgressListeners,
+                progressListeners,
+                cancellationToken,
+                systemProperties,
+                new FailsafeStreamedValueListener(streamedValueListener)
+            );
         }
 
         public void copyFrom(ConsumerOperationParameters operationParameters) {
@@ -223,7 +254,8 @@ public class ConsumerOperationParameters implements BuildParameters {
             legacyProgressListeners.addAll(operationParameters.legacyProgressListeners);
             progressListeners.putAll(operationParameters.progressListeners);
             arguments = operationParameters.arguments;
-            jvmArguments = operationParameters.jvmArguments;
+            baseJvmArguments = operationParameters.baseJvmArguments;
+            additionalJvmArguments = operationParameters.additionalJvmArguments;
             envVariables = operationParameters.envVariables;
             stdout = operationParameters.stdout;
             stderr = operationParameters.stderr;
@@ -248,7 +280,8 @@ public class ConsumerOperationParameters implements BuildParameters {
     private final InputStream stdin;
 
     private final File javaHome;
-    private final List<String> jvmArguments;
+    private final List<String> baseJvmArguments;
+    private final List<String> additionalJvmArguments;
     private final Map<String, String> envVariables;
     private final List<String> arguments;
     private final List<String> tasks;
@@ -259,11 +292,31 @@ public class ConsumerOperationParameters implements BuildParameters {
     private final Map<OperationType, List<ProgressListener>> progressListeners;
 
     private final Map<String, String> systemProperties;
+    private final FailsafeStreamedValueListener streamedValueListener;
 
-    private ConsumerOperationParameters(String entryPointName, ConnectionParameters parameters, OutputStream stdout, OutputStream stderr, Boolean colorOutput, InputStream stdin,
-                                        File javaHome, List<String> jvmArguments,  Map<String, String> envVariables, List<String> arguments, List<String> tasks, List<InternalLaunchable> launchables, ClassPath injectedPluginClasspath,
-                                        List<org.gradle.tooling.ProgressListener> legacyProgressListeners, Map<OperationType, List<ProgressListener>> progressListeners, CancellationToken cancellationToken,
-                                        Map<String, String> systemProperties) {
+    private ConsumerOperationParameters(
+        String entryPointName,
+        ConnectionParameters parameters,
+        OutputStream stdout,
+        OutputStream stderr,
+        Boolean colorOutput,
+        InputStream stdin,
+        File javaHome,
+        @Nullable
+        List<String> baseJvmArguments,
+        @Nullable
+        List<String> additionalJvmArguments,
+        Map<String, String> envVariables,
+        List<String> arguments,
+        List<String> tasks,
+        List<InternalLaunchable> launchables,
+        ClassPath injectedPluginClasspath,
+        List<org.gradle.tooling.ProgressListener> legacyProgressListeners,
+        Map<OperationType, List<ProgressListener>> progressListeners,
+        CancellationToken cancellationToken,
+        Map<String, String> systemProperties,
+        FailsafeStreamedValueListener streamedValueListener
+    ) {
         this.entryPointName = entryPointName;
         this.parameters = parameters;
         this.stdout = stdout;
@@ -271,7 +324,8 @@ public class ConsumerOperationParameters implements BuildParameters {
         this.colorOutput = colorOutput;
         this.stdin = stdin;
         this.javaHome = javaHome;
-        this.jvmArguments = jvmArguments;
+        this.baseJvmArguments = baseJvmArguments;
+        this.additionalJvmArguments = additionalJvmArguments;
         this.envVariables = envVariables;
         this.arguments = arguments;
         this.tasks = tasks;
@@ -281,6 +335,7 @@ public class ConsumerOperationParameters implements BuildParameters {
         this.legacyProgressListeners = legacyProgressListeners;
         this.progressListeners = progressListeners;
         this.systemProperties = systemProperties;
+        this.streamedValueListener = streamedValueListener;
 
         // create the listener adapters right when the ConsumerOperationParameters are instantiated but no earlier,
         // this ensures that when multiple requests are issued that are built from the same builder, such requests do not share any state kept in the listener adapters
@@ -391,8 +446,43 @@ public class ConsumerOperationParameters implements BuildParameters {
         return javaHome;
     }
 
+    @Nullable
     public List<String> getJvmArguments() {
-        return jvmArguments;
+        // Backport fix for https://github.com/gradle/gradle/issues/31462
+        // Cross-version scenarios
+        // - Old TAPI (8.12 and before) invokes new Gradle (8.13 and after):
+        //     ProviderConnection will catch UnsupportedMethodException when calling getBaseJvmArgs() and will fall back to this method, but with the previous behavior (ie `return jvmArguments`)
+        //     see https://github.com/gradle/gradle/blob/v8.12.0/platforms/ide/tooling-api/src/main/java/org/gradle/tooling/internal/consumer/parameters/ConsumerOperationParameters.java#L406
+        // - New TAPI (8.13 and after) invokes old Gradle (8.12 and before):
+        //     We try to approximate the behavior of the new Gradle by returning the combined list of JVM arguments defined in gradle.properties and in the TAPI client config; see the method body below.
+        //     see https://github.com/gradle/gradle/blob/v8.12.0/platforms/core-runtime/launcher/src/main/java/org/gradle/tooling/internal/provider/ProviderConnection.java#L350
+
+        if (baseJvmArguments == null && additionalJvmArguments == null) {
+            // To keep the old behavior, when no JVM arguments are set, return null.
+            return null;
+        } else {
+            // Otherwise, return the combined list of JVM arguments defined in the gradle.properties file and in the TAPI client config.
+            List<String> arguments = new ArrayList<>();
+            if (baseJvmArguments != null) {
+                arguments.addAll(baseJvmArguments);
+            } else {
+                arguments.addAll(ConnectionConfigurationUtil.determineJvmArguments(parameters));
+            }
+            if (additionalJvmArguments != null) {
+                arguments.addAll(additionalJvmArguments);
+            }
+            return arguments;
+        }
+    }
+
+    @Nullable
+    public List<String> getBaseJvmArguments() {
+        return baseJvmArguments;
+    }
+
+    @Nullable
+    public List<String> getAdditionalJvmArguments() {
+        return additionalJvmArguments;
     }
 
     public Map<String, String> getEnvironmentVariables() {
@@ -442,8 +532,18 @@ public class ConsumerOperationParameters implements BuildParameters {
     /**
      * @since 7.6
      */
-    public  Map<String, ?> getSystemProperties() {
+    public Map<String, ?> getSystemProperties() {
         return systemProperties;
     }
 
+    public FailsafeStreamedValueListener getStreamedValueListener() {
+        return streamedValueListener;
+    }
+
+    /**
+     * @since 8.6
+     */
+    public void onStreamedValue(Object model) {
+        streamedValueListener.onValue(model);
+    }
 }

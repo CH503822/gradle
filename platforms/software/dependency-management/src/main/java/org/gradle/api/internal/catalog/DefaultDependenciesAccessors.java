@@ -17,8 +17,6 @@ package org.gradle.api.internal.catalog;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.artifacts.VersionCatalog;
@@ -32,7 +30,7 @@ import org.gradle.api.internal.SettingsInternal;
 import org.gradle.api.internal.artifacts.DefaultProjectDependencyFactory;
 import org.gradle.api.internal.artifacts.dsl.CapabilityNotationParser;
 import org.gradle.api.internal.artifacts.dsl.dependencies.ProjectFinder;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.attributes.AttributesFactory;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.api.internal.project.ProjectInternal;
@@ -52,6 +50,8 @@ import org.gradle.internal.execution.ExecutionEngine;
 import org.gradle.internal.execution.ImmutableUnitOfWork;
 import org.gradle.internal.execution.InputFingerprinter;
 import org.gradle.internal.execution.UnitOfWork;
+import org.gradle.internal.execution.caching.CachingDisabledReason;
+import org.gradle.internal.execution.history.OverlappingOutputs;
 import org.gradle.internal.execution.model.InputNormalizer;
 import org.gradle.internal.execution.workspace.ImmutableWorkspaceProvider;
 import org.gradle.internal.file.TreeType;
@@ -74,8 +74,10 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.File;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -100,10 +102,10 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
     private final ExecutionEngine engine;
     private final FileCollectionFactory fileCollectionFactory;
     private final InputFingerprinter inputFingerprinter;
-    private final ImmutableAttributesFactory attributesFactory;
+    private final AttributesFactory attributesFactory;
     private final CapabilityNotationParser capabilityNotationParser;
-    private final List<DefaultVersionCatalog> models = Lists.newArrayList();
-    private final Map<String, Class<? extends ExternalModuleDependencyFactory>> factories = Maps.newHashMap();
+    private final List<DefaultVersionCatalog> models = new ArrayList<>();
+    private final Map<String, Class<? extends ExternalModuleDependencyFactory>> factories = new HashMap<>();
 
     private ClassLoaderScope classLoaderScope;
     private Class<? extends TypeSafeProjectDependencyFactory> generatedProjectFactory;
@@ -119,7 +121,7 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
         ExecutionEngine engine,
         FileCollectionFactory fileCollectionFactory,
         InputFingerprinter inputFingerprinter,
-        ImmutableAttributesFactory attributesFactory,
+        AttributesFactory attributesFactory,
         CapabilityNotationParser capabilityNotationParser
     ) {
         this.classPath = registry.getClassPath("DEPENDENCIES-EXTENSION-COMPILER");
@@ -196,7 +198,7 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
     }
 
     private static boolean assertCanGenerateAccessors(ProjectRegistry<? extends ProjectDescriptor> projectRegistry) {
-        List<String> errors = Lists.newArrayList();
+        List<String> errors = new ArrayList<>();
         projectRegistry.getAllProjects()
             .stream()
             .map(ProjectDescriptor::getName)
@@ -340,11 +342,10 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
 
         @Override
         public Identity identify(Map<String, ValueSnapshot> identityInputs, Map<String, CurrentFileCollectionFingerprint> identityFileInputs) {
-            return () -> {
-                Hasher hasher = Hashing.sha1().newHasher();
-                identityInputs.values().forEach(s -> s.appendToHasher(hasher));
-                return hasher.hash().toString();
-            };
+            Hasher hasher = Hashing.sha1().newHasher();
+            identityInputs.values().forEach(s -> s.appendToHasher(hasher));
+            String identity = hasher.hash().toString();
+            return () -> identity;
         }
 
         @Override
@@ -413,6 +414,12 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
         }
 
         @Override
+        public Optional<CachingDisabledReason> shouldDisableCaching(@Nullable OverlappingOutputs detectedOverlappingOutputs) {
+            // This was a behaviour before 8.9, where we unified ExecutionEngine in https://github.com/gradle/gradle/pull/29534
+            return Optional.of(NOT_WORTH_CACHING);
+        }
+
+        @Override
         protected List<ClassSource> getClassSources() {
             return Arrays.asList(
                 new DependenciesAccessorClassSource(model.getName(), model, getProblemsService()),
@@ -427,6 +434,10 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
             visitor.visitInputProperty(IN_VERSIONS, model::getVersionAliases);
             visitor.visitInputProperty(IN_PLUGINS, model::getPluginAliases);
             visitor.visitInputProperty(IN_MODEL_NAME, model::getName);
+        }
+
+        @Override
+        public void visitRegularInputs(InputVisitor visitor) {
             visitor.visitInputFileProperty(IN_CLASSPATH, InputBehavior.NON_INCREMENTAL,
                 new InputFileValueSupplier(
                     classPath,
@@ -451,8 +462,14 @@ public class DefaultDependenciesAccessors implements DependenciesAccessors {
         }
 
         @Override
+        public Optional<CachingDisabledReason> shouldDisableCaching(@Nullable OverlappingOutputs detectedOverlappingOutputs) {
+            // This was a behaviour before 8.9, where we unified ExecutionEngine in https://github.com/gradle/gradle/pull/29534
+            return Optional.of(NOT_WORTH_CACHING);
+        }
+
+        @Override
         protected List<ClassSource> getClassSources() {
-            List<ClassSource> sources = Lists.newArrayList();
+            List<ClassSource> sources = new ArrayList<>();
             sources.add(new RootProjectAccessorSource(projectRegistry.getRootProject()));
             for (ProjectDescriptor project : projectRegistry.getAllProjects()) {
                 sources.add(new ProjectAccessorClassSource(project));

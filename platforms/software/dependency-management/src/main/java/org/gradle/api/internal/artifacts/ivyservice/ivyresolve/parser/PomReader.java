@@ -15,7 +15,6 @@
  */
 package org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser;
 
-import com.google.common.collect.Lists;
 import org.apache.commons.io.IOUtils;
 import org.apache.ivy.core.IvyPatternHelper;
 import org.gradle.api.artifacts.ModuleIdentifier;
@@ -74,7 +73,6 @@ public class PomReader implements PomParent {
     private static final String GROUP_ID = "groupId";
     private static final String ARTIFACT_ID = "artifactId";
     private static final String VERSION = "version";
-    private static final String DESCRIPTION = "description";
     private static final String PARENT = "parent";
     private static final String SCOPE = "scope";
     private static final String CLASSIFIER = "classifier";
@@ -374,9 +372,9 @@ public class PomReader implements PomParent {
             String relocGroupId = getFirstChildText(relocation, GROUP_ID);
             String relocArtId = getFirstChildText(relocation, ARTIFACT_ID);
             String relocVersion = getFirstChildText(relocation, VERSION);
-            relocGroupId = relocGroupId == null ? getGroupId() : relocGroupId;
-            relocArtId = relocArtId == null ? getArtifactId() : relocArtId;
-            relocVersion = relocVersion == null ? getVersion() : relocVersion;
+            relocGroupId = relocGroupId == null ? getGroupId() : replaceProps(relocGroupId);
+            relocArtId = relocArtId == null ? getArtifactId() : replaceProps(relocArtId);
+            relocVersion = relocVersion == null ? getVersion() : replaceProps(relocVersion);
             return DefaultModuleVersionIdentifier.newId(relocGroupId, relocArtId, relocVersion);
         }
     }
@@ -576,7 +574,7 @@ public class PomReader implements PomParent {
             Element exclusionsElement = getFirstChildElement(depElement, EXCLUSIONS);
             if (exclusionsElement != null) {
                 NodeList childs = exclusionsElement.getChildNodes();
-                List<ModuleIdentifier> exclusions = Lists.newArrayList();
+                List<ModuleIdentifier> exclusions = new ArrayList<>();
                 for (int i = 0; i < childs.getLength(); i++) {
                     Node node = childs.item(i);
                     if (node instanceof Element && EXCLUSION.equals(node.getNodeName())) {
@@ -605,7 +603,7 @@ public class PomReader implements PomParent {
 
         public boolean isOptional() {
             Element e = getFirstChildElement(depElement, OPTIONAL);
-            return (e != null) && "true".equalsIgnoreCase(getTextContent(e));
+            return (e != null) && "true".equalsIgnoreCase(getTextContent(e).trim());
         }
     }
 

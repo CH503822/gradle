@@ -21,21 +21,31 @@ plugins {
 description = "Plugin used to package a project as a distribution."
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":core-api"))
-    implementation(project(":core"))
-    implementation(project(":dependency-management"))
-    implementation(project(":file-collections"))
-    implementation(project(":model-core"))
-    implementation(project(":platform-base"))
+    api(libs.inject)
+
+    api(projects.stdlibJavaExtensions)
+    api(projects.baseServices)
+    api(projects.core)
+    api(projects.coreApi)
+    api(projects.fileOperations)
+
+    implementation(projects.dependencyManagement)
+    implementation(projects.fileCollections)
+    implementation(projects.modelCore)
+    implementation(projects.platformBase)
 
     implementation(libs.commonsLang)
-    implementation(libs.groovy)
-    implementation(libs.inject)
 
-    testImplementation(testFixtures(project(":core")))
+    runtimeOnly(libs.groovy)
 
-    integTestDistributionRuntimeOnly(project(":distributions-core"))
+    testImplementation(testFixtures(projects.core))
+
+    integTestDistributionRuntimeOnly(projects.distributionsJvm) {
+        because("Uses application plugin.")
+    }
 }
 
 integTest.usesJavadocCodeSnippets = true
+tasks.isolatedProjectsIntegTest {
+    enabled = false
+}

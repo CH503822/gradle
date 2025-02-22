@@ -21,45 +21,53 @@ plugins {
 description = "Plugins and integration with code quality (Checkstyle, PMD, CodeNarc)"
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":logging"))
-    implementation(project(":native"))
-    implementation(project(":process-services"))
-    implementation(project(":core-api"))
-    implementation(project(":model-core"))
-    implementation(project(":core"))
-    implementation(project(":language-jvm"))
-    implementation(project(":plugins-groovy"))
-    implementation(project(":plugins-java-base"))
-    implementation(project(":workers"))
-    implementation(project(":reporting"))
-    implementation(project(":platform-jvm"))
-    implementation(project(":file-collections"))
-    implementation(project(":toolchains-jvm"))
-    compileOnly(project(":internal-instrumentation-api"))
+    api(projects.baseServices)
+    api(projects.core)
+    api(projects.coreApi)
+    api(projects.modelCore)
+    api(projects.platformJvm)
+    api(projects.pluginsJavaBase)
+    api(projects.reporting)
+    api(projects.stdlibJavaExtensions)
+    api(projects.toolchainsJvm)
+    api(projects.toolchainsJvmShared)
+    api(projects.workers)
 
-    implementation(libs.groovy)
-    implementation(libs.groovyAnt)
+    api(libs.groovy)
+    api(libs.inject)
+    api(libs.jsr305)
+
+    implementation(projects.daemonServerWorker)
+    implementation(projects.logging)
+    implementation(projects.native)
+    implementation(projects.pluginsGroovy)
+    implementation(projects.serviceLookup)
+
+    compileOnly(projects.internalInstrumentationApi)
+
     implementation(libs.groovyXml)
     implementation(libs.guava)
-    implementation(libs.inject)
-    implementation(libs.ant)
+    implementation(libs.slf4jApi)
+    implementation(libs.commonsIo)
 
-    testImplementation(project(":file-collections"))
-    testImplementation(project(":plugins-java"))
-    testImplementation(testFixtures(project(":core")))
-    testImplementation(testFixtures(project(":model-core")))
+    runtimeOnly(projects.languageJvm)
 
-    testFixturesImplementation(project(":core"))
-    testFixturesImplementation(project(":core-api"))
-    testFixturesImplementation(project(":base-services"))
+    testImplementation(projects.fileCollections)
+    testImplementation(projects.pluginsJava)
+    testImplementation(testFixtures(projects.core))
+    testImplementation(testFixtures(projects.modelCore))
 
-    testRuntimeOnly(project(":distributions-core")) {
+    testFixturesImplementation(projects.core)
+    testFixturesImplementation(testFixtures(projects.core))
+    testFixturesImplementation(projects.coreApi)
+    testFixturesImplementation(projects.baseServices)
+
+    testRuntimeOnly(projects.distributionsCore) {
         because("ProjectBuilder tests load services from a Gradle distribution.")
     }
-    integTestDistributionRuntimeOnly(project(":distributions-full"))
+    integTestDistributionRuntimeOnly(projects.distributionsFull)
 
-    integTestImplementation(testFixtures(project(":language-groovy")))
+    integTestImplementation(testFixtures(projects.languageGroovy))
     integTestImplementation(libs.jsoup) {
         because("We need to validate generated HTML reports")
     }
@@ -67,4 +75,7 @@ dependencies {
 
 packageCycles {
     excludePatterns.add("org/gradle/api/plugins/quality/internal/*")
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

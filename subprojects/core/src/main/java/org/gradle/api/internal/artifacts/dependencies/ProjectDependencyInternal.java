@@ -16,16 +16,13 @@
 
 package org.gradle.api.internal.artifacts.dependencies;
 
-import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ProjectDependency;
-import org.gradle.util.Path;
+import org.gradle.api.internal.project.ProjectIdentity;
 
 public interface ProjectDependencyInternal extends ProjectDependency {
 
     /**
-     * Returns a unique path for the target project within the current build tree.
+     * Get the identity of the target project.
      */
-    Path getIdentityPath();
-
-    Configuration findProjectConfiguration();
+    ProjectIdentity getTargetProjectIdentity();
 }

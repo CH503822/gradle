@@ -131,13 +131,6 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             afterEvaluate {
                 thing.prop = "value 2"
             }
-
-            task before {
-                doLast {
-                    thing.prop = providers.provider { "value 3" }
-                }
-            }
-            thing.dependsOn before
         """
 
         when:
@@ -146,6 +139,128 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
         then:
         failure.assertHasDescription("Execution failed for task ':thing'.")
         failure.assertHasCause("The value for task ':thing' property 'prop' is final and cannot be changed any further.")
+    }
+
+    def "UPGRADED task @Input property is LENIENTLY implicitly finalized when task starts execution UNTIL NEXT MAJOR"() {
+        given:
+        buildFile """
+            import org.gradle.internal.instrumentation.api.annotations.ReplacesEagerProperty
+
+            abstract class SomeTask extends DefaultTask {
+                @ReplacesEagerProperty
+                @Input
+                abstract Property<String> getProp()
+
+                @OutputFile
+                final Property<RegularFile> outputFile = project.objects.fileProperty()
+
+                @TaskAction
+                void go() {
+                    println("value: " + prop.get())
+                    outputFile.get().asFile.text = prop.get()
+                }
+            }
+
+            task thing(type: SomeTask) {
+                prop = "value 1"
+                outputFile = layout.buildDirectory.file("out.txt")
+                doFirst {
+                    prop = "value 3"
+                }
+            }
+
+            afterEvaluate {
+                thing.prop = "value 2"
+            }
+        """
+
+        expect:
+        executer.expectDeprecationWarningWithPattern("Changing property value of task ':thing' property 'prop' at execution time. This behavior has been deprecated.*")
+        succeeds("thing")
+        outputContains("value: value 3")
+    }
+
+    def "@ReplacesEagerProperty works with annotation #annotation"() {
+        given:
+        buildFile """
+            import org.gradle.internal.instrumentation.api.annotations.ReplacesEagerProperty
+
+            abstract class SomeTask extends DefaultTask {
+                @ReplacesEagerProperty
+                $annotation
+                abstract Property<String> getProp()
+
+                @TaskAction
+                void go() {
+                    println("value: " + prop.get())
+                }
+            }
+
+            task thing(type: SomeTask) {
+                prop = "value 1"
+                doFirst {
+                    prop = "value 3"
+                }
+            }
+
+            afterEvaluate {
+                thing.prop = "value 2"
+            }
+        """
+
+        expect:
+        succeeds("thing")
+        outputContains("value: value 3")
+
+        where:
+        annotation      | _
+        "@Internal"     | _
+        "@Console"      | _
+        "@OptionValues" | _
+        "@ReplacedBy"   | _
+        "@Destroys"     | _
+        "@LocalState"   | _
+    }
+
+    def "@ReplacesEagerProperty works with annotation @Nested"() {
+        given:
+        buildFile """
+            import org.gradle.internal.instrumentation.api.annotations.ReplacesEagerProperty
+
+            class Bean {
+                @Internal
+                String value
+                Bean(String value) {
+                    this.value = value
+                }
+
+                String toString() {
+                    return value
+                }
+            }
+
+            abstract class SomeTask extends DefaultTask {
+                @ReplacesEagerProperty
+                @Nested
+                abstract Property<Bean> getProp()
+
+                @TaskAction
+                void go() {
+                    println("value: " + prop.get())
+                }
+            }
+
+            task thing(type: SomeTask) {
+                prop = new Bean("value 1")
+                doFirst {
+                    prop = new Bean("value 2")
+                }
+            }
+        """
+
+        expect:
+        succeeds("thing")
+        outputContains("value: value 2")
     }
 
     def "task ad hoc input property is implicitly finalized when task starts execution"() {
@@ -207,6 +322,7 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             }
 
             task show {
+                def thing = thing
                 // Task graph calculation is ok
                 dependsOn {
                     println("value = " + thing.prop.get())
@@ -246,6 +362,7 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             thing.prop.disallowUnsafeRead()
 
             task show {
+                def thing = thing
                 dependsOn {
                     thing.prop.set("123")
                     println("value = " + thing.prop.get())
@@ -290,6 +407,7 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             thing.prop = "value 1"
 
             task show {
+                def thing = thing
                 dependsOn {
                     thing.prop.finalizeValue()
                     println("value = " + thing.prop.get())
@@ -348,6 +466,8 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             }
 
             task show {
+                def one = one
+                def two = two
                 // Task graph calculation is ok
                 dependsOn {
                     println("value = " + two.prop.get())
@@ -415,6 +535,9 @@ class PropertyLifecycleIntegrationTest extends AbstractIntegrationSpec {
             }
 
             task show {
+                def one = one
+                def two = two
+                def three = three
                 doLast {
                     println("three = " + three.prop.get())
                     println("two = " + two.prop.get())

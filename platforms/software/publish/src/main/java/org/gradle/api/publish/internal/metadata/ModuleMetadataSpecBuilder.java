@@ -28,6 +28,9 @@ import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.artifacts.VersionConstraint;
+import org.gradle.api.artifacts.capability.CapabilitySelector;
+import org.gradle.api.internal.artifacts.capability.SpecificCapabilitySelector;
+import org.gradle.api.internal.artifacts.capability.FeatureCapabilitySelector;
 import org.gradle.api.attributes.Attribute;
 import org.gradle.api.attributes.AttributeContainer;
 import org.gradle.api.capabilities.Capability;
@@ -41,6 +44,8 @@ import org.gradle.api.internal.artifacts.PublishArtifactInternal;
 import org.gradle.api.internal.artifacts.dependencies.DefaultImmutableVersionConstraint;
 import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependencyConstraint;
 import org.gradle.api.internal.component.SoftwareComponentInternal;
+import org.gradle.api.internal.provider.MergeProvider;
+import org.gradle.api.internal.provider.Providers;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.publish.internal.PublicationInternal;
 import org.gradle.api.publish.internal.mapping.ComponentDependencyResolver;
@@ -55,7 +60,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -79,14 +83,12 @@ public class ModuleMetadataSpecBuilder {
     private final Map<SoftwareComponent, ComponentData> componentCoordinates = new HashMap<>();
     private final DependencyCoordinateResolverFactory dependencyCoordinateResolverFactory;
     private final InvalidPublicationChecker checker;
-    private final List<DependencyAttributesValidator> dependencyAttributeValidators;
 
     public ModuleMetadataSpecBuilder(
         PublicationInternal<?> publication,
         Collection<? extends PublicationInternal<?>> publications,
         InvalidPublicationChecker checker,
-        DependencyCoordinateResolverFactory dependencyCoordinateResolverFactory,
-        List<DependencyAttributesValidator> dependencyAttributeValidators
+        DependencyCoordinateResolverFactory dependencyCoordinateResolverFactory
     ) {
         this.component = publication.getComponent();
         this.publicationCoordinates = publication.getCoordinates();
@@ -94,13 +96,12 @@ public class ModuleMetadataSpecBuilder {
         this.publications = publications;
         this.checker = checker;
         this.dependencyCoordinateResolverFactory = dependencyCoordinateResolverFactory;
-        this.dependencyAttributeValidators = dependencyAttributeValidators;
         // Collect a map from component to coordinates. This might be better to move to the component or some publications model
         collectCoordinates(componentCoordinates);
     }
 
-    public ModuleMetadataSpec build() {
-        return new ModuleMetadataSpec(identity(), variants(), publication.isPublishBuildId());
+    public Provider<ModuleMetadataSpec> build() {
+        return variants().map(variants -> new ModuleMetadataSpec(identity(), variants, publication.isPublishBuildId()));
     }
 
     private ModuleMetadataSpec.Identity identity() {
@@ -125,22 +126,22 @@ public class ModuleMetadataSpecBuilder {
         );
     }
 
-    private List<ModuleMetadataSpec.Variant> variants() {
-        ArrayList<ModuleMetadataSpec.Variant> variants = new ArrayList<>();
+    private Provider<List<ModuleMetadataSpec.Variant>> variants() {
+        List<Provider<ModuleMetadataSpec.Variant>> variants = new ArrayList<>();
         SoftwareComponentInternal softwareComponent = component.get();
         VersionMappingStrategyInternal versionMappingStrategy = publication.getVersionMappingStrategy();
         checker.checkComponent(softwareComponent);
         for (SoftwareComponentVariant variant : softwareComponent.getUsages()) {
             checkVariant(variant);
-            variants.add(
+            variants.add(dependencyCoordinateResolverFactory.createCoordinateResolvers(variant, versionMappingStrategy).map(resolvers ->
                 new ModuleMetadataSpec.LocalVariant(
                     variant.getName(),
                     attributesFor(variant.getAttributes()),
                     capabilitiesFor(variant.getCapabilities()),
-                    dependenciesOf(variant, versionMappingStrategy),
-                    dependencyConstraintsFor(variant, versionMappingStrategy),
+                    dependenciesOf(variant, resolvers.getComponentResolver()),
+                    dependencyConstraintsFor(variant, resolvers.getComponentResolver()),
                     artifactsOf(variant)
-                )
+                ))
             );
         }
         if (softwareComponent instanceof ComponentWithVariants) {
@@ -151,19 +152,19 @@ public class ModuleMetadataSpecBuilder {
                 if (childComponent instanceof SoftwareComponentInternal) {
                     for (SoftwareComponentVariant variant : ((SoftwareComponentInternal) childComponent).getUsages()) {
                         checkVariant(variant);
-                        variants.add(
+                        variants.add(Providers.of(
                             new ModuleMetadataSpec.RemoteVariant(
                                 variant.getName(),
                                 attributesFor(variant.getAttributes()),
                                 availableAt(publicationCoordinates, childCoordinates),
                                 capabilitiesFor(variant.getCapabilities())
                             )
-                        );
+                        ));
                     }
                 }
             }
         }
-        return variants;
+        return new MergeProvider<>(variants);
     }
 
     private List<ModuleMetadataSpec.Artifact> artifactsOf(SoftwareComponentVariant variant) {
@@ -212,12 +213,14 @@ public class ModuleMetadataSpecBuilder {
         Set<ExcludeRule> additionalExcludes,
         ComponentDependencyResolver dependencyResolver,
         DependencyArtifact dependencyArtifact,
-        String variant) {
+        String variant
+    ) {
+        ModuleMetadataSpec.DependencyCoordinates coordinates = dependencyCoordinatesFor(dependency, dependencyResolver);
         return new ModuleMetadataSpec.Dependency(
-            dependencyCoordinatesFor(dependency, dependencyResolver),
+            coordinates,
             excludedRulesFor(dependency, additionalExcludes),
-            dependencyAttributesFor(variant, dependency.getGroup(), dependency.getName(), dependency.getAttributes()),
-            capabilitiesFor(dependency.getRequestedCapabilities()),
+            dependencyAttributesFor(variant, coordinates.group, coordinates.name, dependency.getAttributes()),
+            capabilitySelectorsFor(dependency.getCapabilitySelectors(), coordinates),
             dependency.isEndorsingStrictVersions(),
             isNotEmpty(dependency.getReason()) ? dependency.getReason() : null,
             dependencyArtifact != null ? artifactSelectorFor(dependencyArtifact) : null
@@ -229,9 +232,10 @@ public class ModuleMetadataSpecBuilder {
         ComponentDependencyResolver dependencyResolver,
         String variant
     ) {
+        ModuleMetadataSpec.DependencyCoordinates coordinates = dependencyConstraintCoordinatesFor(dependencyConstraint, dependencyResolver);
         return new ModuleMetadataSpec.DependencyConstraint(
-            dependencyConstraintCoordinatesFor(dependencyConstraint, dependencyResolver),
-            dependencyAttributesFor(variant, dependencyConstraint.getGroup(), dependencyConstraint.getName(), dependencyConstraint.getAttributes()),
+            coordinates,
+            dependencyAttributesFor(variant, coordinates.group, coordinates.name, dependencyConstraint.getAttributes()),
             isNotEmpty(dependencyConstraint.getReason()) ? dependencyConstraint.getReason() : null
         );
     }
@@ -288,7 +292,7 @@ public class ModuleMetadataSpecBuilder {
         return new ModuleMetadataSpec.ArtifactSelector(
             dependencyArtifact.getName(),
             dependencyArtifact.getType(),
-            isNullOrEmpty(dependencyArtifact.getExtension()) ? null : dependencyArtifact.getExtension(),
+            dependencyArtifact.getExtension() == null ? dependencyArtifact.getType() : dependencyArtifact.getExtension(),
             isNullOrEmpty(dependencyArtifact.getClassifier()) ? null : dependencyArtifact.getClassifier()
         );
     }
@@ -309,6 +313,44 @@ public class ModuleMetadataSpecBuilder {
             );
         }
         return metadataCapabilities;
+    }
+
+    private static List<ModuleMetadataSpec.Capability> capabilitySelectorsFor(
+        Set<CapabilitySelector> capabilitySelectors,
+        ModuleMetadataSpec.DependencyCoordinates targetComponent
+    ) {
+        if (capabilitySelectors.isEmpty()) {
+            return emptyList();
+        }
+
+        ArrayList<ModuleMetadataSpec.Capability> metadataCapabilities = new ArrayList<>();
+        for (CapabilitySelector capabilitySelector : capabilitySelectors) {
+            metadataCapabilities.add(resolveCapability(targetComponent, capabilitySelector));
+        }
+        return metadataCapabilities;
+    }
+
+    private static ModuleMetadataSpec.Capability resolveCapability(
+        ModuleMetadataSpec.DependencyCoordinates componentCoordinates,
+        CapabilitySelector capabilitySelector
+    ) {
+        if (capabilitySelector instanceof SpecificCapabilitySelector) {
+            SpecificCapabilitySelector specificSelector = (SpecificCapabilitySelector) capabilitySelector;
+            return new ModuleMetadataSpec.Capability(
+                specificSelector.getGroup(),
+                specificSelector.getName(),
+                null
+            );
+        } else if (capabilitySelector instanceof FeatureCapabilitySelector) {
+            FeatureCapabilitySelector featureSelector = (FeatureCapabilitySelector) capabilitySelector;
+            return new ModuleMetadataSpec.Capability(
+                componentCoordinates.group,
+                componentCoordinates.name + "-" + featureSelector.getFeatureName(),
+                null
+            );
+        } else {
+            throw new UnsupportedOperationException("Unsupported capability selector type: " + capabilitySelector.getClass().getName());
+        }
     }
 
     private List<ModuleMetadataSpec.Attribute> attributesFor(AttributeContainer attributes) {
@@ -334,10 +376,7 @@ public class ModuleMetadataSpecBuilder {
     }
 
     private List<ModuleMetadataSpec.Attribute> dependencyAttributesFor(String variant, String group, String name, AttributeContainer attributes) {
-        for (DependencyAttributesValidator validator : dependencyAttributeValidators) {
-            Optional<String> error = validator.validationErrorFor(group, name, attributes);
-            error.ifPresent(s -> checker.addDependencyValidationError(variant, s, validator.getExplanation(), validator.getSuppressor()));
-        }
+        checker.validateAttributes(variant, group, name, attributes);
         return attributesFor(attributes);
     }
 
@@ -353,13 +392,12 @@ public class ModuleMetadataSpecBuilder {
         }
     }
 
-    private List<ModuleMetadataSpec.Dependency> dependenciesOf(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy) {
+    private List<ModuleMetadataSpec.Dependency> dependenciesOf(SoftwareComponentVariant variant, ComponentDependencyResolver dependencyResolver) {
         if (variant.getDependencies().isEmpty()) {
             return emptyList();
         }
         ArrayList<ModuleMetadataSpec.Dependency> dependencies = new ArrayList<>();
         Set<ExcludeRule> additionalExcludes = variant.getGlobalExcludes();
-        ComponentDependencyResolver dependencyResolver = dependencyCoordinateResolverFactory.createCoordinateResolvers(variant, versionMappingStrategy).getComponentResolver();
         for (ModuleDependency moduleDependency : variant.getDependencies()) {
             if (moduleDependency.getArtifacts().isEmpty()) {
                 dependencies.add(
@@ -386,11 +424,10 @@ public class ModuleMetadataSpecBuilder {
         return dependencies;
     }
 
-    private List<ModuleMetadataSpec.DependencyConstraint> dependencyConstraintsFor(SoftwareComponentVariant variant, VersionMappingStrategyInternal versionMappingStrategy) {
+    private List<ModuleMetadataSpec.DependencyConstraint> dependencyConstraintsFor(SoftwareComponentVariant variant, ComponentDependencyResolver dependencyResolver) {
         if (variant.getDependencyConstraints().isEmpty()) {
             return emptyList();
         }
-        ComponentDependencyResolver dependencyResolver = dependencyCoordinateResolverFactory.createCoordinateResolvers(variant, versionMappingStrategy).getComponentResolver();
         ArrayList<ModuleMetadataSpec.DependencyConstraint> dependencyConstraints = new ArrayList<>();
         for (DependencyConstraint dependencyConstraint : variant.getDependencyConstraints()) {
             dependencyConstraints.add(

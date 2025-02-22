@@ -19,6 +19,7 @@ import org.gradle.api.Task
 import org.gradle.api.tasks.TaskCollection
 import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.TaskProvider
+import org.gradle.internal.deprecation.DeprecationLogger
 
 import org.gradle.kotlin.dsl.support.delegates.TaskContainerDelegate
 
@@ -164,15 +165,23 @@ private constructor(
      * @see [TaskProvider.configure]
      */
     operator fun String.invoke(configuration: Task.() -> Unit): TaskProvider<Task> =
-        this().apply { configure(configuration) }
+        named(this).apply { configure(configuration) }
 
     /**
      * Locates a task by name, without triggering its creation or configuration, failing if there is no such task.
      *
      * @see [TaskContainer.named]
      */
-    operator fun String.invoke(): TaskProvider<Task> =
-        container.named(this)
+    @Deprecated("Use named(String) instead.", ReplaceWith("named(this)"))
+    operator fun String.invoke(): TaskProvider<Task> {
+        DeprecationLogger.deprecateBehaviour(("Task '$this' found by String.invoke() notation."))
+            .withContext("The \"name\"() notation can cause confusion with methods provided by Kotlin or the JDK.")
+            .withAdvice("Use named(String) instead.")
+            .willBeRemovedInGradle9()
+            .withUpgradeGuideSection(8, "string_invoke")
+            .nagUser()
+        return container.named(this)
+    }
 
     /**
      * Configures a task by name, without triggering its creation or configuration, failing if there is no such task.
@@ -267,5 +276,58 @@ inline fun <reified T : Task> TaskContainer.register(name: String, vararg argume
  * Creates a [Task] with the given [name] and type, passing the given arguments to the [javax.inject.Inject]-annotated constructor,
  * and adds it to this project tasks container.
  */
+@Deprecated("Use register instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("this.register<T>(name, *arguments)"))
+@Suppress("DEPRECATION")
 inline fun <reified T : Task> TaskContainer.create(name: String, vararg arguments: Any): T =
     create(name, T::class.java, *arguments)
+
+/**
+ * Creates a [Task] with the specified [name] and type, adds it to the container,
+ * and configures it with the specified action.
+ */
+@Deprecated("Use register instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("this.register<T>(name, configureAction)"))
+@Suppress("DEPRECATION")
+inline fun <reified T : Task> TaskContainer.create(name: String, noinline configureAction: T.() -> Unit): T =
+    create(name, T::class.java, configureAction)
+
+/**
+ * Provides a property delegate that creates tasks of the default type.
+ */
+@Deprecated("Use registering instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("registering"))
+val TaskContainer.creating
+    get() = NamedDomainObjectContainerCreatingDelegateProvider.of(this)
+
+/**
+ * Provides a property delegate that creates tasks of the default type with the given [configuration].
+ *
+ * `val someTask by tasks.creating { onlyIf = true }`
+ */
+@Deprecated("Use registering instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("registering(configuration)"))
+fun TaskContainer.creating(configuration: Task.() -> Unit) =
+    NamedDomainObjectContainerCreatingDelegateProvider.of(this, configuration)
+
+/**
+ * Provides a property delegate that creates tasks of the given [type].
+ */
+@Deprecated("Use registering instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("registering(type)"))
+fun <U : Task> TaskContainer.creating(type: KClass<U>) =
+    PolymorphicDomainObjectContainerCreatingDelegateProvider.of(this, type.java)
+
+
+/**
+ * Provides a property delegate that creates tasks of the given [type] with the given [configuration].
+ */
+@Deprecated("Use registering instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("registering(type, configuration)"))
+@Suppress("DEPRECATION")
+fun <U : Task> TaskContainer.creating(type: KClass<U>, configuration: U.() -> Unit) =
+    creating(type.java, configuration)
+
+
+/**
+ * Provides a property delegate that creates tasks of the given [type] expressed as a [java.lang.Class]
+ * with the given [configuration].
+ */
+@Deprecated("Use registering instead. See https://docs.gradle.org/current/userguide/task_configuration_avoidance.html for more information.", ReplaceWith("registering(type, configuration)"))
+fun <U : Task> TaskContainer.creating(type: Class<U>, configuration: U.() -> Unit) =
+    PolymorphicDomainObjectContainerCreatingDelegateProvider.of(this, type, configuration)
+

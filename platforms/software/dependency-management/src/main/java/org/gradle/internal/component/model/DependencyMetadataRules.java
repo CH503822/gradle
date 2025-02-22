@@ -18,7 +18,6 @@ package org.gradle.internal.component.model;
 
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.DependencyConstraintMetadata;
 import org.gradle.api.artifacts.DependencyConstraintsMetadata;
@@ -28,7 +27,7 @@ import org.gradle.api.internal.artifacts.repositories.resolver.DependencyConstra
 import org.gradle.api.internal.artifacts.repositories.resolver.DependencyConstraintsMetadataAdapter;
 import org.gradle.api.internal.artifacts.repositories.resolver.DirectDependenciesMetadataAdapter;
 import org.gradle.api.internal.artifacts.repositories.resolver.DirectDependencyMetadataAdapter;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.attributes.AttributesFactory;
 import org.gradle.api.specs.Spec;
 import org.gradle.internal.component.external.model.ModuleDependencyMetadata;
 import org.gradle.internal.component.external.model.VariantMetadataRules;
@@ -36,6 +35,7 @@ import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.typeconversion.NotationParser;
 import org.gradle.util.internal.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -51,14 +51,16 @@ public class DependencyMetadataRules {
     private final Instantiator instantiator;
     private final NotationParser<Object, DirectDependencyMetadata> dependencyNotationParser;
     private final NotationParser<Object, DependencyConstraintMetadata> dependencyConstraintNotationParser;
-    private final List<VariantMetadataRules.VariantAction<? super DirectDependenciesMetadata>> dependencyActions = Lists.newArrayList();
-    private final List<VariantMetadataRules.VariantAction<? super DependencyConstraintsMetadata>> dependencyConstraintActions = Lists.newArrayList();
-    private final ImmutableAttributesFactory attributesFactory;
+    private final List<VariantMetadataRules.VariantAction<? super DirectDependenciesMetadata>> dependencyActions = new ArrayList<>();
+    private final List<VariantMetadataRules.VariantAction<? super DependencyConstraintsMetadata>> dependencyConstraintActions = new ArrayList<>();
+    private final AttributesFactory attributesFactory;
 
-    public DependencyMetadataRules(Instantiator instantiator,
-                                   NotationParser<Object, DirectDependencyMetadata> dependencyNotationParser,
-                                   NotationParser<Object, DependencyConstraintMetadata> dependencyConstraintNotationParser,
-                                   ImmutableAttributesFactory attributesFactory) {
+    public DependencyMetadataRules(
+        Instantiator instantiator,
+        NotationParser<Object, DirectDependencyMetadata> dependencyNotationParser,
+        NotationParser<Object, DependencyConstraintMetadata> dependencyConstraintNotationParser,
+        AttributesFactory attributesFactory
+    ) {
         this.instantiator = instantiator;
         this.dependencyNotationParser = dependencyNotationParser;
         this.dependencyConstraintNotationParser = dependencyConstraintNotationParser;

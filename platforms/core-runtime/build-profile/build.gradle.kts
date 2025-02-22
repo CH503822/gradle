@@ -5,18 +5,27 @@ plugins {
 description = "Provides high-level insights into a Gradle build (--profile)"
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":messaging"))
-    implementation(project(":logging"))
-    implementation(project(":core-api"))
-    implementation(project(":core"))
-    implementation(project(":build-option"))
+    api(projects.stdlibJavaExtensions)
+    api(projects.serviceProvider)
+    api(projects.time)
+    api(projects.baseServices)
+    api(projects.core)
+    api(projects.coreApi)
+    api(projects.enterpriseLogging)
+
+    implementation(projects.logging)
+    implementation(projects.loggingApi)
+    implementation(projects.reportRendering)
+    implementation(projects.serviceLookup)
 
     implementation(libs.guava)
 
-    testImplementation(project(":internal-testing"))
+    testImplementation(projects.internalTesting)
 
     integTestImplementation(libs.jsoup)
 
-    integTestDistributionRuntimeOnly(project(":distributions-full"))
+    integTestDistributionRuntimeOnly(projects.distributionsFull)
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

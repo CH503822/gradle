@@ -18,13 +18,13 @@ package org.gradle.api.tasks;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.internal.file.FileOperations;
 import org.gradle.internal.IoActions;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.instrumentation.api.annotations.ToBeReplacedByLazyProperty;
 import org.gradle.internal.util.PropertiesUtils;
 import org.gradle.util.internal.DeferredUtil;
 
@@ -35,6 +35,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -58,8 +59,8 @@ import java.util.concurrent.Callable;
  */
 @CacheableTask
 public abstract class WriteProperties extends DefaultTask {
-    private final Map<String, Callable<String>> deferredProperties = Maps.newHashMap();
-    private final Map<String, String> properties = Maps.newHashMap();
+    private final Map<String, Callable<String>> deferredProperties = new HashMap<>();
+    private final Map<String, String> properties = new HashMap<>();
     private String lineSeparator = "\n";
     private String comment;
     private String encoding = "ISO_8859_1";
@@ -70,6 +71,7 @@ public abstract class WriteProperties extends DefaultTask {
      * @since 3.3
      */
     @Input
+    @ToBeReplacedByLazyProperty
     public Map<String, String> getProperties() {
         ImmutableMap.Builder<String, String> propertiesBuilder = ImmutableMap.builder();
         propertiesBuilder.putAll(properties);
@@ -145,6 +147,7 @@ public abstract class WriteProperties extends DefaultTask {
      * Defaults to {@literal `\n`}.
      */
     @Input
+    @ToBeReplacedByLazyProperty
     public String getLineSeparator() {
         return lineSeparator;
     }
@@ -162,6 +165,7 @@ public abstract class WriteProperties extends DefaultTask {
     @Nullable
     @Optional
     @Input
+    @ToBeReplacedByLazyProperty
     public String getComment() {
         return comment;
     }
@@ -178,6 +182,7 @@ public abstract class WriteProperties extends DefaultTask {
      * If set to anything different, unicode escaping is turned off.
      */
     @Input
+    @ToBeReplacedByLazyProperty
     public String getEncoding() {
         return encoding;
     }

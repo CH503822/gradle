@@ -17,7 +17,6 @@
 package org.gradle.language.scala.tasks;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Maps;
 import com.google.common.io.Files;
 import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
@@ -52,6 +51,7 @@ import org.gradle.internal.buildevents.BuildStartedTime;
 import org.gradle.internal.classpath.CachedClasspathTransformer;
 import org.gradle.internal.classpath.DefaultClassPath;
 import org.gradle.internal.file.Deleter;
+import org.gradle.internal.instrumentation.api.annotations.ToBeReplacedByLazyProperty;
 import org.gradle.jvm.toolchain.JavaInstallationMetadata;
 import org.gradle.jvm.toolchain.JavaLauncher;
 import org.gradle.jvm.toolchain.JavaToolchainService;
@@ -63,6 +63,7 @@ import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -99,7 +100,6 @@ public abstract class AbstractScalaCompile extends AbstractCompile implements Ha
     protected AbstractScalaCompile() {
         ObjectFactory objectFactory = getObjectFactory();
         this.scalaCompileOptions = objectFactory.newInstance(ScalaCompileOptions.class);
-        this.scalaCompileOptions.setIncrementalOptions(objectFactory.newInstance(IncrementalCompileOptions.class));
     }
 
     /**
@@ -114,6 +114,7 @@ public abstract class AbstractScalaCompile extends AbstractCompile implements Ha
      * Returns the Java compilation options.
      */
     @Nested
+    @Override
     public CompileOptions getOptions() {
         return compileOptions;
     }
@@ -165,7 +166,7 @@ public abstract class AbstractScalaCompile extends AbstractCompile implements Ha
         spec.setTempDir(getTemporaryDir());
         List<File> effectiveClasspath;
         if (scalaCompileOptions.getKeepAliveMode().get() == KeepAliveMode.DAEMON) {
-            effectiveClasspath = getCachedClasspathTransformer().transform(DefaultClassPath.of(getClasspath()), CachedClasspathTransformer.StandardTransform.None).getAsFiles();
+            effectiveClasspath = getCachedClasspathTransformer().copyingTransform(DefaultClassPath.of(getClasspath())).getAsFiles();
         } else {
             effectiveClasspath = ImmutableList.copyOf(getClasspath());
         }
@@ -223,7 +224,7 @@ public abstract class AbstractScalaCompile extends AbstractCompile implements Ha
     }
 
     private Map<File, File> resolveAnalysisMappingsForOtherProjects() {
-        Map<File, File> analysisMap = Maps.newHashMap();
+        Map<File, File> analysisMap = new HashMap<>();
         for (File mapping : analysisFiles.getFiles()) {
             if (mapping.exists()) {
                 try {
@@ -244,6 +245,7 @@ public abstract class AbstractScalaCompile extends AbstractCompile implements Ha
     @Override
     // Java source files are supported, too. Therefore, we should care about the relative path.
     @PathSensitive(PathSensitivity.RELATIVE)
+    @ToBeReplacedByLazyProperty
     public FileTree getSource() {
         return super.getSource();
     }

@@ -17,6 +17,7 @@
 package org.gradle.tooling.provider.model.internal;
 
 import org.gradle.api.NonNullApi;
+import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.ProjectState;
@@ -37,33 +38,41 @@ public class DefaultIntermediateToolingModelProvider implements IntermediateTool
 
     private final IntermediateBuildActionRunner actionRunner;
     private final ToolingModelParameterCarrier.Factory parameterCarrierFactory;
+    private final ToolingModelProjectDependencyListener projectDependencyListener;
 
-    public DefaultIntermediateToolingModelProvider(IntermediateBuildActionRunner actionRunner, ToolingModelParameterCarrier.Factory parameterCarrierFactory) {
+    public DefaultIntermediateToolingModelProvider(
+        IntermediateBuildActionRunner actionRunner,
+        ToolingModelParameterCarrier.Factory parameterCarrierFactory,
+        ToolingModelProjectDependencyListener projectDependencyListener
+    ) {
         this.actionRunner = actionRunner;
         this.parameterCarrierFactory = parameterCarrierFactory;
+        this.projectDependencyListener = projectDependencyListener;
     }
 
     @Override
-    public <T> List<T> getModels(List<Project> targets, Class<T> modelType) {
-        return getModelsImpl(targets, modelType, null);
-    }
-
-    @Override
-    public <T> List<T> getModels(List<Project> targets, Class<T> modelType, Object modelBuilderParameter) {
-        return getModelsImpl(targets, modelType, modelBuilderParameter);
-    }
-
-    private <T> List<T> getModelsImpl(List<Project> targets, Class<T> modelType, @Nullable Object modelBuilderParameter) {
+    public <T> List<T> getModels(Project requester, List<Project> targets, String modelName, Class<T> modelType, @Nullable Object parameter) {
         if (targets.isEmpty()) {
             return Collections.emptyList();
         }
 
-        String modelName = modelType.getName();
-        List<Object> rawModels = getModels(targets, modelName, modelBuilderParameter);
+
+        List<Object> rawModels = fetchModels(requester, targets, modelName, parameter);
         return ensureModelTypes(modelType, rawModels);
     }
 
-    private List<Object> getModels(List<Project> targets, String modelName, @Nullable Object parameter) {
+    @Override
+    public <P extends Plugin<Project>> void applyPlugin(Project requester, List<Project> targets, Class<P> pluginClass) {
+        List<Object> rawModels = fetchModels(requester, targets, PluginApplyingBuilder.MODEL_NAME, createPluginApplyingParameter(pluginClass));
+        ensureModelTypes(Boolean.class, rawModels);
+    }
+
+    private static <P extends Plugin<Project>> PluginApplyingParameter createPluginApplyingParameter(Class<P> pluginClass) {
+        return () -> pluginClass;
+    }
+
+    private List<Object> fetchModels(Project requester, List<Project> targets, String modelName, @Nullable Object parameter) {
+        reportToolingModelDependencies((ProjectInternal) requester, targets);
         BuildState buildState = extractSingleBuildState(targets);
         ToolingModelParameterCarrier carrier = parameter == null ? null : parameterCarrierFactory.createCarrier(parameter);
         return buildState.withToolingModels(controller -> getModels(controller, targets, modelName, carrier));
@@ -123,5 +132,11 @@ public class DefaultIntermediateToolingModelProvider implements IntermediateTool
 
     private <T> List<T> runFetchActions(List<Supplier<T>> actions) {
         return actionRunner.run(actions);
+    }
+
+    private void reportToolingModelDependencies(ProjectInternal requester, List<Project> targets) {
+        for (Project target : targets) {
+            projectDependencyListener.onToolingModelDependency(requester.getOwner(), ((ProjectInternal) target).getOwner());
+        }
     }
 }

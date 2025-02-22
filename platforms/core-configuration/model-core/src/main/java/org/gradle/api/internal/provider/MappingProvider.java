@@ -17,6 +17,7 @@
 package org.gradle.api.internal.provider;
 
 import org.gradle.api.Transformer;
+import org.gradle.internal.evaluation.EvaluationScopeContext;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -46,23 +47,27 @@ public class MappingProvider<OUT, IN> extends TransformBackedProvider<OUT, IN> {
     @Override
     public boolean calculatePresence(ValueConsumer consumer) {
         // Rely on MappingProvider contract with regard to the transform always returning value
-        return provider.calculatePresence(consumer);
+        try (EvaluationScopeContext ignored = openScope()) {
+            return provider.calculatePresence(consumer);
+        }
     }
 
     @Override
     public ExecutionTimeValue<? extends OUT> calculateExecutionTimeValue() {
-        ExecutionTimeValue<? extends IN> value = provider.calculateExecutionTimeValue();
-        if (value.isChangingValue()) {
-            return ExecutionTimeValue.changingValue(new MappingProvider<OUT, IN>(type, value.getChangingValue(), transformer));
-        }
+        try (EvaluationScopeContext context = openScope()) {
+            ExecutionTimeValue<? extends IN> value = provider.calculateExecutionTimeValue();
+            if (value.isChangingValue()) {
+                return ExecutionTimeValue.changingValue(new MappingProvider<OUT, IN>(type, value.getChangingValue(), transformer));
+            }
 
-        return ExecutionTimeValue.value(mapValue(value.toValue()));
+            return ExecutionTimeValue.value(mapValue(context, value.toValue()));
+        }
     }
 
     @Nonnull
     @Override
-    protected Value<OUT> mapValue(Value<? extends IN> value) {
-        Value<OUT> transformedValue = super.mapValue(value);
+    protected Value<OUT> mapValue(EvaluationScopeContext context, Value<? extends IN> value) {
+        Value<OUT> transformedValue = super.mapValue(context, value);
         // Check MappingProvider contract with regard to the transform
         if (!value.isMissing() && transformedValue.isMissing()) {
             throw new IllegalStateException("The transformer in MappingProvider must always return a value");
@@ -71,10 +76,10 @@ public class MappingProvider<OUT, IN> extends TransformBackedProvider<OUT, IN> {
     }
 
     @Override
-    protected void beforeRead() {}
+    protected void beforeRead(EvaluationScopeContext context) {}
 
     @Override
-    public String toString() {
+    protected String toStringNoReentrance() {
         return "map(" + (type == null ? "" : type.getName() + " ") + provider + " " + transformer + ")";
     }
 }

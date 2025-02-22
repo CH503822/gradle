@@ -20,37 +20,44 @@ plugins {
 
 description = "Adds support for creating dependency platforms for JVM projects"
 
+errorprone {
+    disabledChecks.addAll(
+        "InlineFormatString", // 1 occurrences
+    )
+}
+
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":core-api"))
-    implementation(project(":dependency-management"))
-    implementation(project(":model-core"))
-    implementation(project(":core"))
-    implementation(project(":ivy"))
-    implementation(project(":maven"))
-    implementation(project(":platform-base"))
-    implementation(project(":platform-jvm"))
-    implementation(project(":publish"))
+    api(projects.coreApi)
 
-    implementation(libs.groovy)
-    implementation(libs.guava)
-    implementation(libs.inject)
+    api(libs.inject)
 
-    integTestImplementation(testFixtures(project(":dependency-management")))
-    integTestImplementation(testFixtures(project(":resources-http")))
+    implementation(projects.baseServices)
+    implementation(projects.core)
+    implementation(projects.dependencyManagement)
+    implementation(projects.ivy)
+    implementation(projects.stdlibJavaExtensions)
+    implementation(projects.maven)
+    implementation(projects.platformBase)
+    implementation(projects.platformJvm)
+    implementation(projects.publish)
 
-    testImplementation(project(":language-java")) {
+    runtimeOnly(libs.groovy)
+
+    integTestImplementation(testFixtures(projects.dependencyManagement))
+    integTestImplementation(testFixtures(projects.resourcesHttp))
+
+    testImplementation(projects.languageJava) {
         because("need to access JavaCompile task")
     }
-    testImplementation(project(":plugins")) {
-        because("need to access JavaPluginExtension")
-    }
 
-    testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(projects.core))
 
-    integTestDistributionRuntimeOnly(project(":distributions-jvm"))
+    integTestDistributionRuntimeOnly(projects.distributionsJvm)
 }
 
 packageCycles {
     excludePatterns.add("org/gradle/api/internal/java/**")
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

@@ -18,7 +18,6 @@ package org.gradle.api.internal.artifacts.configurations;
 import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.internal.artifacts.ComponentSelectionRulesInternal;
 import org.gradle.api.internal.artifacts.DependencySubstitutionInternal;
-import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy;
 import org.gradle.api.internal.artifacts.dsl.dependencies.DependencyLockingProvider;
 import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionsInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolutionstrategy.CapabilitiesResolutionInternal;
@@ -28,7 +27,15 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
     /**
      * Discard any configuration state that is not required after graph resolution has been attempted.
      */
-    void discardStateRequiredForGraphResolution();
+    void maybeDiscardStateRequiredForGraphResolution();
+
+    /**
+     * Sets whether or not any configuration resolution is final and the state required for resolution can be
+     * discarded.  Setting this to true implies that the configuration may be re-resolved again in the future.
+     *
+     * Defaults to false.
+     */
+    void setKeepStateRequiredForGraphResolution(boolean keepStateRequiredForGraphResolution);
 
     /**
      * Gets the current expiry policy for dynamic revisions.
@@ -95,14 +102,6 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
      */
     boolean isDependencyLockingEnabled();
 
-    /**
-     * Confirms that an unlocked configuration has been resolved.
-     * This allows the lock state for said configuration to be dropped if it existed before.
-     *
-     * @param configurationName the unlocked configuration
-     */
-    void confirmUnlockedConfigurationResolved(String configurationName);
-
     CapabilitiesResolutionInternal getCapabilitiesResolutionRules();
 
     boolean isFailingOnDynamicVersions();
@@ -111,7 +110,7 @@ public interface ResolutionStrategyInternal extends ResolutionStrategy {
 
     boolean isDependencyVerificationEnabled();
 
-    void setReturnAllVariants(boolean returnAllVariants);
+    void setIncludeAllSelectableVariantResults(boolean selectableVariantResults);
 
-    boolean getReturnAllVariants();
+    boolean getIncludeAllSelectableVariantResults();
 }

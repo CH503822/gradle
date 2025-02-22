@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 the original author or authors.
+ * Copyright 2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,10 @@ package org.gradle.api.problems;
 
 import org.gradle.api.Incubating;
 
-import javax.annotation.Nullable;
-
 /**
- * A basic problem location pointing to a specific part of a file.
+ * A file location.
  *
- * @since 8.6
+ * @since 8.13
  */
 @Incubating
 public interface FileLocation extends ProblemLocation {
@@ -32,34 +30,7 @@ public interface FileLocation extends ProblemLocation {
      * The path to the file.
      *
      * @return the file path
-     * @since 8.6
+     * @since 8.13
      */
     String getPath();
-
-    /**
-     * The line number within the file.
-     *
-     * @return the line number
-     * @since 8.6
-     */
-    @Nullable
-    Integer getLine();
-
-    /**
-     * The offset on the selected line.
-     *
-     * @return the column
-     * @since 8.6
-     */
-    @Nullable
-    Integer getColumn();
-
-    /**
-     * The content of the content starting from {@link #getColumn()}.
-     *
-     * @return the length
-     * @since 8.6
-     */
-    @Nullable
-    Integer getLength();
 }

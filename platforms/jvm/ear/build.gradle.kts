@@ -4,40 +4,50 @@ plugins {
 
 description = "Adds support for assembling web application EAR files"
 
-dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":core"))
-    implementation(project(":core-api"))
-    implementation(project(":functional"))
-    implementation(project(":dependency-management"))
-    implementation(project(":execution"))
-    implementation(project(":file-collections"))
-    implementation(project(":language-java"))
-    implementation(project(":language-jvm"))
-    implementation(project(":logging"))
-    implementation(project(":model-core"))
-    implementation(project(":platform-jvm"))
-    implementation(project(":platform-base"))
-    implementation(project(":plugins"))
-    implementation(project(":plugins-java"))
-    implementation(project(":plugins-java-base"))
-    implementation(project(":war"))
+errorprone {
+    disabledChecks.addAll(
+        "DefaultCharset", // 2 occurrences
+    )
+}
 
-    implementation(libs.groovy)
+dependencies {
+    api(libs.groovy)
+    api(libs.inject)
+    api(libs.jsr305)
+
+    api(projects.baseServices)
+    api(projects.coreApi)
+    api(projects.languageJvm)
+    api(projects.modelCore)
+    api(projects.platformJvm)
+
+    implementation(projects.serviceLookup)
+    implementation(projects.stdlibJavaExtensions)
+    implementation(projects.core)
+    implementation(projects.fileOperations)
+    implementation(projects.dependencyManagement)
+    implementation(projects.execution)
+    implementation(projects.fileCollections)
+    implementation(projects.languageJava)
+    implementation(projects.logging)
+    implementation(projects.platformBase)
+    implementation(projects.pluginsJava)
+    implementation(projects.pluginsJavaBase)
+
     implementation(libs.groovyXml)
     implementation(libs.guava)
     implementation(libs.commonsLang)
-    implementation(libs.inject)
 
-    testImplementation(project(":native"))
-    testImplementation(project(":base-services-groovy"))
+    testImplementation(projects.baseServicesGroovy)
+    testImplementation(testFixtures(projects.core))
+    testImplementation(projects.native)
+    testImplementation(projects.war)
     testImplementation(libs.ant)
-    testImplementation(testFixtures(project(":core")))
 
-    testRuntimeOnly(project(":distributions-jvm")) {
+    testRuntimeOnly(projects.distributionsJvm) {
         because("ProjectBuilder tests load services from a Gradle distribution.")
     }
-    integTestDistributionRuntimeOnly(project(":distributions-jvm"))
+    integTestDistributionRuntimeOnly(projects.distributionsJvm)
 }
 
 strictCompile {
@@ -46,4 +56,7 @@ strictCompile {
 
 packageCycles {
     excludePatterns.add("org/gradle/plugins/ear/internal/*")
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

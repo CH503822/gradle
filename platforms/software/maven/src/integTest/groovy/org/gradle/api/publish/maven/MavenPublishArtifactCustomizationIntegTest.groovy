@@ -204,7 +204,7 @@ class MavenPublishArtifactCustomizationIntegTest extends AbstractMavenPublishInt
         failure.assertHasCause("""
 Cannot publish module metadata because an artifact from the 'java' component has been removed. The available artifacts had these problems:
 - customFile.jar:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile.jar
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile.jar
         """.trim())
     }
 
@@ -231,7 +231,7 @@ Cannot publish module metadata because an artifact from the 'java' component has
         failure.assertHasCause("""
 Cannot publish module metadata because an artifact from the 'java' component has been removed. The available artifacts had these problems:
 - customFile.txt:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile.txt
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile.txt
 \t- extension differs: (expected) jar != (actual) csv
         """.trim())
     }
@@ -259,7 +259,7 @@ Cannot publish module metadata because an artifact from the 'java' component has
         failure.assertHasCause("""
 Cannot publish module metadata because an artifact from the 'java' component has been removed. The available artifacts had these problems:
 - customFile-foobar.jar:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile-foobar.jar
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) customFile-foobar.jar
 \t- classifier differs: (expected)  != (actual) foobar
         """.trim())
     }
@@ -288,12 +288,12 @@ Cannot publish module metadata because an artifact from the 'java' component has
         failure.assertHasCause("""
 Cannot publish module metadata because an artifact from the 'java' component has been removed. The available artifacts had these problems:
 - d1.jar:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) d1.jar
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) d1.jar
 - a2.txt:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) a2.txt
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) a2.txt
 \t- extension differs: (expected) jar != (actual) txt
 - b3.txt:
-\t- file differs: (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) b3.txt
+\t- file differs (relative to root project 'projectText'): (expected) ${pathLiteral("build/libs/projectText-1.0.jar")} != (actual) b3.txt
 \t- extension differs: (expected) jar != (actual) txt
 ... (1 more artifact(s) not shown)
         """.trim())
@@ -305,16 +305,16 @@ Cannot publish module metadata because an artifact from the 'java' component has
             publications {
                 mavenCustom(MavenPublication) {
                     artifact("customFile.txt") {
-                        classifier "output"
+                        classifier = "output"
                     }
                     artifact(customFileTask.outputFile) {
-                        extension "htm"
-                        classifier "documentation"
+                        extension = "htm"
+                        classifier = "documentation"
                         builtBy customFileTask
                     }
                     artifact(regularFileTask.outputFile) {
-                        classifier "regular"
-                        extension "txt"
+                        classifier = "regular"
+                        extension = "txt"
                     }
                     artifact customJar {
                         archiveClassifier = null
@@ -549,7 +549,7 @@ Cannot publish module metadata because an artifact from the 'java' component has
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 $publications
             }

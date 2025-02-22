@@ -15,23 +15,25 @@
  */
 package org.gradle.api.internal.artifacts.configurations;
 
-import org.gradle.api.GradleException;
+import com.google.common.collect.ImmutableList;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ExcludeRule;
 import org.gradle.api.artifacts.PublishArtifact;
-import org.gradle.api.internal.artifacts.ResolveContext;
+import org.gradle.api.internal.DomainObjectContext;
+import org.gradle.api.internal.artifacts.ivyservice.ResolutionParameters;
+import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.RootComponentMetadataBuilder;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.internal.DisplayName;
-import org.gradle.internal.FinalizableValue;
 import org.gradle.internal.deprecation.DeprecatableConfiguration;
+import org.gradle.operations.dependencies.configurations.ConfigurationIdentity;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 
-public interface ConfigurationInternal extends ResolveContext, DeprecatableConfiguration, FinalizableValue, Configuration {
+public interface ConfigurationInternal extends DeprecatableConfiguration, Configuration {
+
     enum InternalState {
         UNRESOLVED,
         BUILD_DEPENDENCIES_RESOLVED,
@@ -43,8 +45,15 @@ public interface ConfigurationInternal extends ResolveContext, DeprecatableConfi
         ARTIFACTS_RESOLVED
     }
 
+    String getDisplayName();
+
+    DisplayName asDescribable();
+
     @Override
     AttributeContainerInternal getAttributes();
+
+    @Override
+    ResolutionStrategyInternal getResolutionStrategy();
 
     /**
      * Runs any registered dependency actions for this Configuration, and any parent Configuration.
@@ -53,7 +62,22 @@ public interface ConfigurationInternal extends ResolveContext, DeprecatableConfi
      */
     void runDependencyActions();
 
+    /**
+     * Marks this configuration as observed, meaning its state has been seen by some external operation
+     * and further changes to this context that would change its public state are forbidden.
+     *
+     * @param reason Describes the external operation that observed this configuration
+     */
+    void markAsObserved(String reason);
+
+    /**
+     * Legacy observation mechanism, will be removed in Gradle 9.0.
+     * <p>
+     * Prefer {@link #markAsObserved(String)}
+     */
     void markAsObserved(InternalState requestedState);
+
+    DomainObjectContext getDomainObjectContext();
 
     void addMutationValidator(MutationValidator validator);
 
@@ -67,20 +91,30 @@ public interface ConfigurationInternal extends ResolveContext, DeprecatableConfi
     boolean isCanBeMutated();
 
     /**
-     * Locks the configuration for mutation
-     * <p>
-     * Any invalid state at this point will be added to the returned list of exceptions.
-     * Handling these becomes the responsibility of the caller.
-     *
-     * @return a list of validation failures when not empty
-     */
-    List<? extends GradleException> preventFromFurtherMutationLenient();
-
-    /**
      * Gets the complete set of exclude rules including those contributed by
      * superconfigurations.
      */
     Set<ExcludeRule> getAllExcludeRules();
+
+    /**
+     * @see ResolutionParameters#getConfigurationIdentity()
+     */
+    ConfigurationIdentity getConfigurationIdentity();
+
+    /**
+     * @see ResolutionParameters#getResolutionHost()
+     */
+    ResolutionHost getResolutionHost();
+
+    /**
+     * @see ResolutionParameters#getRootComponent()
+     */
+    RootComponentMetadataBuilder.RootComponentState toRootComponent();
+
+    /**
+     * Version locks to use during resolution as a result of consistent resolution.
+     */
+    ImmutableList<ResolutionParameters.ModuleVersionLock> getConsistentResolutionVersionLocks();
 
     /**
      * @implSpec Usage: This method should only be called on resolvable configurations and should throw an exception if
@@ -140,9 +174,6 @@ public interface ConfigurationInternal extends ResolveContext, DeprecatableConfi
     }
 
     interface VariantVisitor {
-        // The artifacts to use when this configuration is used as a configuration
-        void visitArtifacts(Collection<? extends PublishArtifact> artifacts);
-
         // This configuration as a variant. May not always be present
         void visitOwnVariant(DisplayName displayName, ImmutableAttributes attributes, Collection<? extends PublishArtifact> artifacts);
 

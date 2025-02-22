@@ -13,32 +13,52 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.gradle.api.internal.artifacts;
 
+import org.gradle.api.Action;
+import org.gradle.api.artifacts.DependencySubstitution;
 import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionRules;
+import org.gradle.internal.Actions;
+import org.gradle.util.internal.CollectionUtils;
 
-public interface GlobalDependencyResolutionRules {
+import javax.inject.Inject;
+import java.util.List;
 
-    ComponentMetadataProcessorFactory NO_OP_FACTORY = resolutionContext -> ComponentMetadataProcessor.NO_OP;
+public class GlobalDependencyResolutionRules {
+    private final DependencySubstitutionRules compositeRule;
 
-    GlobalDependencyResolutionRules NO_OP = new GlobalDependencyResolutionRules() {
-        @Override
-        public ComponentMetadataProcessorFactory getComponentMetadataProcessorFactory() {
-            return NO_OP_FACTORY;
+    @Inject
+    public GlobalDependencyResolutionRules(List<DependencySubstitutionRules> ruleProviders) {
+        this.compositeRule = new CompositeSubstitutionRules(ruleProviders);
+    }
+
+    public DependencySubstitutionRules getDependencySubstitutionRules() {
+        return compositeRule;
+    }
+
+    private static class CompositeSubstitutionRules implements DependencySubstitutionRules {
+        private final List<DependencySubstitutionRules> ruleProviders;
+
+        @Inject
+        public CompositeSubstitutionRules(List<DependencySubstitutionRules> ruleProviders) {
+            this.ruleProviders = ruleProviders;
         }
 
         @Override
-        public ComponentModuleMetadataProcessor getModuleMetadataProcessor() {
-            return ComponentModuleMetadataProcessor.NO_OP;
+        public Action<DependencySubstitution> getRuleAction() {
+            return Actions.composite(CollectionUtils.collect(ruleProviders, DependencySubstitutionRules::getRuleAction));
         }
 
         @Override
-        public DependencySubstitutionRules getDependencySubstitutionRules() {
-            return DependencySubstitutionRules.NO_OP;
+        public boolean rulesMayAddProjectDependency() {
+            for (DependencySubstitutionRules ruleProvider : ruleProviders) {
+                if (ruleProvider.rulesMayAddProjectDependency()) {
+                    return true;
+                }
+            }
+            return false;
         }
-    };
+    }
 
-    ComponentMetadataProcessorFactory getComponentMetadataProcessorFactory();
-    ComponentModuleMetadataProcessor getModuleMetadataProcessor();
-    DependencySubstitutionRules getDependencySubstitutionRules();
 }

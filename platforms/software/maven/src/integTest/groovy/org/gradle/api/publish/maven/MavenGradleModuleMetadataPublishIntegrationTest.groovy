@@ -17,6 +17,7 @@
 package org.gradle.api.publish.maven
 
 import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTest
+import spock.lang.Issue
 
 class MavenGradleModuleMetadataPublishIntegrationTest extends AbstractMavenPublishIntegTest {
     def setup() {
@@ -54,7 +55,7 @@ class TestCapability implements Capability {
         configurations { implementation }
     }
 
-    def testAttributes = project.services.get(org.gradle.api.internal.attributes.ImmutableAttributesFactory)
+    def testAttributes = project.services.get(org.gradle.api.internal.attributes.AttributesFactory)
          .mutable()
          .attribute(Attribute.of('foo', String), 'value')
 """
@@ -73,7 +74,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -117,7 +118,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -165,7 +166,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -216,7 +217,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -261,7 +262,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -306,7 +307,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -324,7 +325,56 @@ class TestCapability implements Capability {
 
         then:
         failure.assertHasCause """Invalid publication 'maven':
-  - Publication only contains dependencies and/or constraints without a version. You need to"""
+  - Publication only contains dependencies and/or constraints without a version. You should add minimal version information"""
+        failure.assertHasErrorOutput "Disable this check by adding 'dependencies-without-versions' to the suppressed validations of the :generateMetadataFileForMavenPublication task."
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/23030")
+    def "can disable validation of dependencies without versions"() {
+        given:
+        settingsFile.text = """
+            rootProject.name = 'root'
+        """
+        buildFile << """
+            apply plugin: 'maven-publish'
+
+            group = 'group'
+            version = '1.0'
+
+            dependencies {
+                implementation("org.test:test")
+            }
+
+            def comp = new TestComponent()
+            comp.usages.add(new TestUsage(
+                    name: 'impl',
+                    usage: objects.named(Usage, 'impl'),
+                    dependencies: configurations.implementation.allDependencies,
+                    attributes: testAttributes))
+
+            publishing {
+                repositories {
+                    maven { url = "${mavenRepo.uri}" }
+                }
+                publications {
+                    maven(MavenPublication) {
+                        from comp
+                    }
+                }
+            }
+
+            tasks.withType(GenerateModuleMetadata).configureEach {
+                suppressedValidationErrors.add('dependencies-without-versions')
+            }
+        """
+
+        settingsFile << "rootProject.name = 'publishTest' "
+
+        when:
+        succeeds 'publish'
+
+        then:
+        executedAndNotSkipped ':generateMetadataFileForMavenPublication', ':publishMavenPublicationToMavenRepository'
     }
 
     def "publishes Gradle metadata redirection marker when Gradle metadata task is enabled (enabled=#enabled)"() {
@@ -347,7 +397,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -389,7 +439,7 @@ class TestCapability implements Capability {
 
                 publishing {
                     repositories {
-                        maven { url "${mavenRepo.uri}" }
+                        maven { url = "${mavenRepo.uri}" }
                     }
                 }
             }
@@ -481,7 +531,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -547,7 +597,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -601,7 +651,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -661,7 +711,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -705,7 +755,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -764,7 +814,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -827,7 +877,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {
@@ -888,7 +938,7 @@ class TestCapability implements Capability {
 
             publishing {
                 repositories {
-                    maven { url "${mavenRepo.uri}" }
+                    maven { url = "${mavenRepo.uri}" }
                 }
                 publications {
                     maven(MavenPublication) {

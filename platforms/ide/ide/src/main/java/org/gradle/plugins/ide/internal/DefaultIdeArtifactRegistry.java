@@ -16,20 +16,20 @@
 
 package org.gradle.plugins.ide.internal;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.DomainObjectContext;
 import org.gradle.api.internal.file.FileOperations;
+import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.ProjectState;
 import org.gradle.api.internal.project.ProjectStateRegistry;
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext;
-import org.gradle.internal.build.BuildState;
 import org.gradle.util.internal.CollectionUtils;
 
 import javax.annotation.Nullable;
+import javax.inject.Inject;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -37,18 +37,19 @@ public class DefaultIdeArtifactRegistry implements IdeArtifactRegistry {
     private final IdeArtifactStore store;
     private final ProjectStateRegistry projectRegistry;
     private final FileOperations fileOperations;
-    private final ProjectComponentIdentifier currentProject;
+    private final ProjectComponentIdentifier currentProjectId;
 
-    public DefaultIdeArtifactRegistry(IdeArtifactStore store, ProjectStateRegistry projectRegistry, FileOperations fileOperations, DomainObjectContext domainObjectContext, BuildState currentBuild) {
+    @Inject
+    public DefaultIdeArtifactRegistry(IdeArtifactStore store, ProjectStateRegistry projectRegistry, FileOperations fileOperations, ProjectInternal currentProject) {
         this.store = store;
         this.projectRegistry = projectRegistry;
         this.fileOperations = fileOperations;
-        currentProject = currentBuild.getProjects().getProject(domainObjectContext.getProjectPath()).getComponentIdentifier();
+        this.currentProjectId = currentProject.getOwner().getComponentIdentifier();
     }
 
     @Override
     public void registerIdeProject(IdeProjectMetadata ideProjectMetadata) {
-        store.put(currentProject, ideProjectMetadata);
+        store.put(currentProjectId, ideProjectMetadata);
     }
 
     @Nullable
@@ -68,7 +69,7 @@ public class DefaultIdeArtifactRegistry implements IdeArtifactRegistry {
 
     @Override
     public <T extends IdeProjectMetadata> List<Reference<T>> getIdeProjects(Class<T> type) {
-        List<Reference<T>> result = Lists.newArrayList();
+        List<Reference<T>> result = new ArrayList<>();
         for (ProjectState project : projectRegistry.getAllProjects()) {
             if (project.getOwner().isImplicitBuild()) {
                 // Do not include implicit builds in workspace

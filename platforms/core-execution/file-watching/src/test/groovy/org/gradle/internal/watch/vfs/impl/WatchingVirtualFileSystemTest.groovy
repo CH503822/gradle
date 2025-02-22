@@ -17,17 +17,16 @@
 package org.gradle.internal.watch.vfs.impl
 
 import net.rubygrapefruit.platform.NativeException
-import org.gradle.internal.operations.TestBuildOperationExecutor
+import org.gradle.internal.operations.TestBuildOperationRunner
 import org.gradle.internal.snapshot.CaseSensitivity
 import org.gradle.internal.snapshot.SnapshotHierarchy
 import org.gradle.internal.vfs.impl.DefaultSnapshotHierarchy
 import org.gradle.internal.watch.registry.FileWatcherRegistry
 import org.gradle.internal.watch.registry.FileWatcherRegistryFactory
 import org.gradle.internal.watch.registry.WatchMode
-import org.gradle.internal.watch.registry.impl.DaemonDocumentationIndex
+import org.gradle.internal.watch.registry.impl.FileSystemWatchingDocumentationIndex
 import org.gradle.internal.watch.vfs.FileChangeListeners
 import org.gradle.internal.watch.vfs.VfsLogging
-import org.gradle.internal.watch.vfs.WatchLogging
 import org.gradle.internal.watch.vfs.WatchableFileSystemDetector
 import spock.lang.Specification
 
@@ -38,15 +37,15 @@ class WatchingVirtualFileSystemTest extends Specification {
     def nonEmptySnapshotHierarchy = Stub(SnapshotHierarchy) {
         empty() >> emptySnapshotHierarchy
     }
-    def daemonDocumentationIndex = Mock(DaemonDocumentationIndex)
+    def documentationIndex = Mock(FileSystemWatchingDocumentationIndex)
     def locationsUpdatedByCurrentBuild = Mock(FileWatchingFilter)
-    def buildOperationRunner = new TestBuildOperationExecutor()
+    def buildOperationRunner = new TestBuildOperationRunner()
     def watchableFileSystemDetector = Mock(WatchableFileSystemDetector)
     def fileChangeListeners = Mock(FileChangeListeners)
     def watchingVirtualFileSystem = new WatchingVirtualFileSystem(
         watcherRegistryFactory,
         nonEmptySnapshotHierarchy,
-        daemonDocumentationIndex,
+        documentationIndex,
         locationsUpdatedByCurrentBuild,
         watchableFileSystemDetector,
         fileChangeListeners
@@ -55,7 +54,7 @@ class WatchingVirtualFileSystemTest extends Specification {
     def "invalidates the virtual file system before and after the build when watching is disabled"() {
         when:
         watchingVirtualFileSystem.updateRootUnderLock { root -> nonEmptySnapshotHierarchy }
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DISABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DISABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         0 * _
 
@@ -63,7 +62,8 @@ class WatchingVirtualFileSystemTest extends Specification {
 
         when:
         watchingVirtualFileSystem.updateRootUnderLock { root -> nonEmptySnapshotHierarchy }
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.DISABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.DISABLED, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.afterBuildFinished()
         then:
         0 * _
 
@@ -72,23 +72,28 @@ class WatchingVirtualFileSystemTest extends Specification {
 
     def "stops the watchers before the build when watching is disabled"() {
         when:
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistryFactory.createFileWatcherRegistry(_) >> watcherRegistry
         1 * watcherRegistry.updateVfsOnBuildStarted(_, _, _) >> watchingVirtualFileSystem.root
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
 
         when:
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
         then:
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.updateVfsOnBuildFinished(_, WatchMode.ENABLED, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        1 * watcherRegistry.updateVfsBeforeBuildFinished(_, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        0 * _
+
+        when:
+        watchingVirtualFileSystem.afterBuildFinished()
+        then:
+        1 * watcherRegistry.updateVfsAfterBuildFinished(_) >> watchingVirtualFileSystem.root
         0 * _
 
         when:
         watchingVirtualFileSystem.updateRootUnderLock { root -> nonEmptySnapshotHierarchy }
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DISABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DISABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistry.close()
         0 * _
@@ -98,27 +103,31 @@ class WatchingVirtualFileSystemTest extends Specification {
 
     def "retains the virtual file system when watching is enabled"() {
         when:
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistryFactory.createFileWatcherRegistry(_) >> watcherRegistry
         1 * watcherRegistry.updateVfsOnBuildStarted(_, _, _) >> watchingVirtualFileSystem.root
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
 
         when:
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
         then:
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.updateVfsOnBuildFinished(_, WatchMode.ENABLED, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        1 * watcherRegistry.updateVfsBeforeBuildFinished(_, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        0 * _
+
+        when:
+        watchingVirtualFileSystem.afterBuildFinished()
+        then:
+        1 * watcherRegistry.updateVfsAfterBuildFinished(_) >> watchingVirtualFileSystem.root
         0 * _
 
         when:
         watchingVirtualFileSystem.updateRootUnderLock { root -> nonEmptySnapshotHierarchy }
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistry.updateVfsOnBuildStarted(_ as SnapshotHierarchy, WatchMode.ENABLED, []) >> { SnapshotHierarchy root, watchMode, unsupportedFileSystems -> root }
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
 
         watchingVirtualFileSystem.root == nonEmptySnapshotHierarchy
@@ -138,11 +147,10 @@ class WatchingVirtualFileSystemTest extends Specification {
         0 * _
 
         when:
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistryFactory.createFileWatcherRegistry(_) >> watcherRegistry
         1 * watcherRegistry.updateVfsOnBuildStarted(_, _, _) >> watchingVirtualFileSystem.root
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         1 * watcherRegistry.registerWatchableHierarchy(watchableHierarchy, _)
         0 * _
 
@@ -152,10 +160,17 @@ class WatchingVirtualFileSystemTest extends Specification {
         1 * watcherRegistry.registerWatchableHierarchy(anotherWatchableHierarchy, _)
 
         when:
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
         then:
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.updateVfsOnBuildFinished(_, WatchMode.ENABLED, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        1 * watcherRegistry.updateVfsBeforeBuildFinished(_, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        0 * _
+
+        when:
+        watchingVirtualFileSystem.afterBuildFinished()
+
+        then:
+        1 * watcherRegistry.updateVfsAfterBuildFinished(_) >> watchingVirtualFileSystem.root
         0 * _
 
         when:
@@ -168,35 +183,39 @@ class WatchingVirtualFileSystemTest extends Specification {
         def unsupportedFileSystems = [new File("unsupported")]
 
         when:
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watchableFileSystemDetector.detectUnsupportedFileSystems() >> unsupportedFileSystems.stream()
         1 * watcherRegistryFactory.createFileWatcherRegistry(_) >> watcherRegistry
         1 * watcherRegistry.updateVfsOnBuildStarted(_, _, unsupportedFileSystems) >> watchingVirtualFileSystem.root
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
 
         when:
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.DEFAULT, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.DEFAULT, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
         then:
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.updateVfsOnBuildFinished(_, WatchMode.DEFAULT, Integer.MAX_VALUE, unsupportedFileSystems) >> watchingVirtualFileSystem.root
+        1 * watcherRegistry.updateVfsBeforeBuildFinished(_, Integer.MAX_VALUE, unsupportedFileSystems) >> watchingVirtualFileSystem.root
+        0 * _
+
+        when:
+        watchingVirtualFileSystem.afterBuildFinished()
+        then:
+        1 * watcherRegistry.updateVfsAfterBuildFinished(_) >> watchingVirtualFileSystem.root
         0 * _
 
         when:
         unsupportedFileSystems = [new File("unsupported"), new File("anotherUnsupported")]
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watchableFileSystemDetector.detectUnsupportedFileSystems() >> unsupportedFileSystems.stream()
         1 * watcherRegistry.updateVfsOnBuildStarted(_ as SnapshotHierarchy, WatchMode.DEFAULT, unsupportedFileSystems) >> { SnapshotHierarchy root, watchMode, it -> root }
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
     }
 
     def "does not start watching when unable to detect unsupported file systems"() {
         when:
-        def result = watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        def result = watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, buildOperationRunner)
         then:
         !result
         1 * watchableFileSystemDetector.detectUnsupportedFileSystems() >> { throw new NativeException("Failed") }
@@ -205,22 +224,27 @@ class WatchingVirtualFileSystemTest extends Specification {
 
     def "stops file system watching when unable to detect unsupported file systems"() {
         when:
-        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildStarted(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner)
         then:
         1 * watcherRegistryFactory.createFileWatcherRegistry(_) >> watcherRegistry
         1 * watcherRegistry.updateVfsOnBuildStarted(_, _, []) >> watchingVirtualFileSystem.root
-        1 * watcherRegistry.setDebugLoggingEnabled(false)
         0 * _
 
         when:
-        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
+        watchingVirtualFileSystem.beforeBuildFinished(WatchMode.ENABLED, VfsLogging.NORMAL, buildOperationRunner, Integer.MAX_VALUE)
         then:
         1 * watcherRegistry.getAndResetStatistics() >> Stub(FileWatcherRegistry.FileWatchingStatistics)
-        1 * watcherRegistry.updateVfsOnBuildFinished(_, WatchMode.ENABLED, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
+        1 * watcherRegistry.updateVfsBeforeBuildFinished(_, Integer.MAX_VALUE, []) >> watchingVirtualFileSystem.root
         0 * _
 
         when:
-        def result = watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, WatchLogging.NORMAL, buildOperationRunner)
+        watchingVirtualFileSystem.afterBuildFinished()
+        then:
+        1 * watcherRegistry.updateVfsAfterBuildFinished(_) >> watchingVirtualFileSystem.root
+        0 * _
+
+        when:
+        def result = watchingVirtualFileSystem.afterBuildStarted(WatchMode.DEFAULT, VfsLogging.NORMAL, buildOperationRunner)
         then:
         !result
         1 * watchableFileSystemDetector.detectUnsupportedFileSystems() >> { throw new NativeException("Failed") }

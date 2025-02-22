@@ -17,6 +17,7 @@
 package org.gradle.api.internal.artifacts.dsl;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableMap;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.artifacts.ComponentModuleMetadataDetails;
 import org.gradle.api.artifacts.ModuleIdentifier;
@@ -26,18 +27,16 @@ import org.gradle.internal.typeconversion.NotationParser;
 import org.gradle.internal.typeconversion.NotationParserBuilder;
 
 import javax.annotation.Nullable;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static com.google.common.collect.Maps.newHashMap;
-import static com.google.common.collect.Sets.newHashSet;
 import static java.lang.String.format;
 
-public class ComponentModuleMetadataContainer implements ModuleReplacementsData {
+public class ComponentModuleMetadataContainer {
 
-    private final Map<ModuleIdentifier, Replacement> replacements = newHashMap();
-    private final Set<ModuleIdentifier> targets = newHashSet();
+    private final Map<ModuleIdentifier, ImmutableModuleReplacements.Replacement> replacements = new HashMap<>();
     private final ImmutableModuleIdentifierFactory moduleIdentifierFactory;
 
     public ComponentModuleMetadataContainer(ImmutableModuleIdentifierFactory moduleIdentifierFactory) {
@@ -58,8 +57,7 @@ public class ComponentModuleMetadataContainer implements ModuleReplacementsData 
             public void replacedBy(final Object targetModule, @Nullable String reason) {
                 ModuleIdentifier target = parser.parseNotation(targetModule);
                 detectCycles(replacements, source, target);
-                replacements.put(source, new Replacement(target, reason));
-                targets.add(target);
+                replacements.put(source, new ImmutableModuleReplacements.Replacement(target, reason));
             }
 
             @Override
@@ -74,17 +72,11 @@ public class ComponentModuleMetadataContainer implements ModuleReplacementsData 
         };
     }
 
-    @Override
-    public Replacement getReplacementFor(ModuleIdentifier sourceModule) {
-        return replacements.get(sourceModule);
+    public ImmutableModuleReplacements getReplacements() {
+        return new ImmutableModuleReplacements(ImmutableMap.copyOf(replacements));
     }
 
-    @Override
-    public boolean participatesInReplacements(ModuleIdentifier moduleId) {
-        return targets.contains(moduleId) || replacements.containsKey(moduleId);
-    }
-
-    private static void detectCycles(Map<ModuleIdentifier, Replacement> replacements, ModuleIdentifier source, ModuleIdentifier target) {
+    private static void detectCycles(Map<ModuleIdentifier, ImmutableModuleReplacements.Replacement> replacements, ModuleIdentifier source, ModuleIdentifier target) {
         if (source.equals(target)) {
             throw new InvalidUserDataException(String.format("Cannot declare module replacement that replaces self: %s->%s", source, target));
         }
@@ -109,7 +101,7 @@ public class ComponentModuleMetadataContainer implements ModuleReplacementsData 
         }
     }
 
-    private static ModuleIdentifier unwrap(Replacement replacement) {
+    private static ModuleIdentifier unwrap(ImmutableModuleReplacements.Replacement replacement) {
         return replacement == null ? null : replacement.getTarget();
     }
 

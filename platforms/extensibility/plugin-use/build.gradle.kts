@@ -3,26 +3,37 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":logging"))
-    implementation(project(":messaging"))
-    implementation(project(":file-collections"))
-    implementation(project(":core-api"))
-    implementation(project(":core"))
-    implementation(project(":dependency-management"))
-    implementation(project(":build-option"))
-    implementation(project(":problems-api"))
+    api(projects.serviceProvider)
+    api(projects.baseServices)
+    api(projects.classloaders)
+    api(projects.coreApi)
+    api(projects.core)
+    api(projects.dependencyManagement)
+    api(projects.fileCollections)
+    api(projects.stdlibJavaExtensions)
+    api(projects.logging)
+    api(projects.messaging)
+    api(projects.modelCore)
+    api(projects.modelReflect)
+    api(projects.problemsApi)
 
-    implementation(libs.groovy)
-    implementation(libs.guava)
+    api(libs.guava)
+    api(libs.jsr305)
 
-    testImplementation(testFixtures(project(":resources-http")))
+    implementation(projects.functional)
 
-    integTestImplementation(project(":base-services-groovy"))
+    implementation(libs.slf4jApi)
+
+    implementation(projects.jvmServices)
+
+    testImplementation(testFixtures(projects.resourcesHttp))
+    testImplementation(testFixtures(projects.core))
+
+    integTestImplementation(projects.baseServicesGroovy)
     integTestImplementation(libs.jetbrainsAnnotations)
     integTestImplementation(libs.groovyTest)
 
-    integTestDistributionRuntimeOnly(project(":distributions-basics")) {
+    integTestDistributionRuntimeOnly(projects.distributionsBasics) {
         because("Requires test-kit: 'java-gradle-plugin' is used in integration tests which always adds the test-kit dependency.")
     }
 }
@@ -30,8 +41,6 @@ dependencies {
 testFilesCleanup.reportOnly = true
 
 description = """Provides functionality for resolving and managing plugins during their application to projects."""
-
-// Remove as part of fixing https://github.com/gradle/configuration-cache/issues/585
-tasks.configCacheIntegTest {
-    systemProperties["org.gradle.configuration-cache.internal.test-disable-load-after-store"] = "true"
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

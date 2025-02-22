@@ -5,8 +5,12 @@ import gradlebuild.buildutils.model.ReleasedVersion
 import gradlebuild.buildutils.tasks.UpdateAgpVersions
 import gradlebuild.buildutils.tasks.UpdateKotlinVersions
 import gradlebuild.buildutils.tasks.UpdateReleasedVersions
-import java.net.URL
+import java.net.URI
 
+
+tasks.named<UpdateDaemonJvm>("updateDaemonJvm") {
+    languageVersion = JavaLanguageVersion.of(17)
+}
 
 tasks.withType<UpdateReleasedVersions>().configureEach {
     releasedVersionsFile = releasedVersionsFile()
@@ -22,7 +26,7 @@ tasks.register<UpdateReleasedVersions>("updateReleasedVersions") {
 
 tasks.register<UpdateReleasedVersions>("updateReleasedVersionsToLatestNightly") {
     currentReleasedVersion = project.provider {
-        val jsonText = URL("https://services.gradle.org/versions/nightly").readText()
+        val jsonText = URI("https://services.gradle.org/versions/nightly").toURL().readText()
         println(jsonText)
         val versionInfo = Gson().fromJson(jsonText, VersionBuildTimeInfo::class.java)
         ReleasedVersion(versionInfo.version, versionInfo.buildTime)
@@ -31,7 +35,7 @@ tasks.register<UpdateReleasedVersions>("updateReleasedVersionsToLatestNightly") 
 
 tasks.register<UpdateAgpVersions>("updateAgpVersions") {
     comment = " Generated - Update by running `./gradlew updateAgpVersions`"
-    minimumSupportedMinor = "7.3"
+    minimumSupported = "7.3.0"
     propertiesFile = layout.projectDirectory.file("gradle/dependency-management/agp-versions.properties")
     compatibilityDocFile = layout.projectDirectory.file("platforms/documentation/docs/src/docs/userguide/releases/compatibility.adoc")
 }

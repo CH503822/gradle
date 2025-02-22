@@ -16,6 +16,13 @@
 
 package org.gradle.api.internal.tasks.testing;
 
+import org.gradle.api.NonNullApi;
+import org.gradle.internal.scan.UsedByScanPlugin;
+
+import javax.annotation.Nullable;
+
+@NonNullApi
+@UsedByScanPlugin("instanceof check")
 public class DecoratingTestDescriptor implements TestDescriptorInternal {
     private final TestDescriptorInternal descriptor;
     private final TestDescriptorInternal parent;
@@ -57,6 +64,15 @@ public class DecoratingTestDescriptor implements TestDescriptorInternal {
     @Override
     public String getClassName() {
         return descriptor.getClassName();
+    }
+
+    @Nullable
+    public String getMethodName() {
+        if (descriptor instanceof AbstractTestDescriptor) {
+            return ((AbstractTestDescriptor) descriptor).getMethodName();
+        } else {
+            return null;
+        }
     }
 
     @Override

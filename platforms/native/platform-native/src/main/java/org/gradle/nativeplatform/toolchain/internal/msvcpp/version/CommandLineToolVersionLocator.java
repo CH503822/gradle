@@ -16,13 +16,15 @@
 
 package org.gradle.nativeplatform.toolchain.internal.msvcpp.version;
 
-import com.google.common.collect.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.stream.JsonReader;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.io.NullOutputStream;
 import org.gradle.internal.io.StreamByteBuffer;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 import org.gradle.process.ExecResult;
 import org.gradle.process.internal.ExecAction;
 import org.gradle.process.internal.ExecActionFactory;
@@ -31,8 +33,10 @@ import org.gradle.util.internal.VersionNumber;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.List;
 
+@ServiceScope(Scope.BuildSession.class)
 public class CommandLineToolVersionLocator extends AbstractVisualStudioVersionLocator implements VisualStudioVersionLocator {
     private static final Logger LOGGER = Logging.getLogger(CommandLineToolVersionLocator.class);
 
@@ -51,11 +55,11 @@ public class CommandLineToolVersionLocator extends AbstractVisualStudioVersionLo
 
     @Override
     protected List<VisualStudioInstallCandidate> locateInstalls() {
-        List<VisualStudioInstallCandidate> installs = Lists.newArrayList();
+        List<VisualStudioInstallCandidate> installs = new ArrayList<>();
 
         File vswhereBinary = vswhereLocator.getVswhereInstall();
         if (vswhereBinary != null) {
-            List<String> args = Lists.newArrayList("-all", "-legacy", "-format", "json", "-utf8");
+            List<String> args = ImmutableList.of("-all", "-legacy", "-format", "json", "-utf8");
             String json = getVswhereOutput(vswhereBinary, args);
             installs.addAll(parseJson(json));
         }
@@ -90,7 +94,7 @@ public class CommandLineToolVersionLocator extends AbstractVisualStudioVersionLo
     }
 
     private List<VisualStudioInstallCandidate> parseJson(String json) {
-        List<VisualStudioInstallCandidate> installs = Lists.newArrayList();
+        List<VisualStudioInstallCandidate> installs = new ArrayList<>();
         JsonReader reader = new JsonReader(new StringReader(json));
         try {
             try {

@@ -16,7 +16,6 @@
 
 package org.gradle.nativeplatform.test.xctest.internal.execution;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.internal.tasks.testing.DefaultTestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestClassProcessor;
 import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
@@ -33,15 +32,16 @@ import org.gradle.internal.os.OperatingSystem;
 import org.gradle.internal.time.Clock;
 import org.gradle.internal.work.WorkerLeaseService;
 import org.gradle.process.ExecResult;
+import org.gradle.process.internal.ClientExecHandleBuilder;
+import org.gradle.process.internal.ClientExecHandleBuilderFactory;
 import org.gradle.process.internal.ExecException;
 import org.gradle.process.internal.ExecHandle;
-import org.gradle.process.internal.ExecHandleBuilder;
-import org.gradle.process.internal.ExecHandleFactory;
 
 import javax.inject.Inject;
 import java.io.File;
 import java.io.OutputStream;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
@@ -60,7 +60,7 @@ import java.util.List;
  */
 public class XCTestExecuter implements TestExecuter<XCTestTestExecutionSpec> {
     @Inject
-    public ExecHandleFactory getExecHandleFactory() {
+    public ClientExecHandleBuilderFactory getExecHandleFactory() {
         throw new UnsupportedOperationException();
     }
 
@@ -90,7 +90,7 @@ public class XCTestExecuter implements TestExecuter<XCTestTestExecutionSpec> {
 
         String rootTestSuiteId = testExecutionSpec.getPath();
 
-        TestClassProcessor processor = new XCTestProcessor(getClock(), executable, workingDir, getExecHandleFactory().newExec(), getIdGenerator(), rootTestSuiteId);
+        TestClassProcessor processor = new XCTestProcessor(getClock(), executable, workingDir, getExecHandleFactory().newExecHandleBuilder(), getIdGenerator(), rootTestSuiteId);
 
         Runnable detector = new XCTestDetector(processor, testExecutionSpec.getTestSelection());
 
@@ -123,18 +123,18 @@ public class XCTestExecuter implements TestExecuter<XCTestTestExecutionSpec> {
     static class XCTestProcessor implements TestClassProcessor {
         private TestResultProcessor resultProcessor;
         private ExecHandle execHandle;
-        private final ExecHandleBuilder execHandleBuilder;
+        private final ClientExecHandleBuilder execHandleBuilder;
         private final IdGenerator<?> idGenerator;
         private final Clock clock;
         private final String rootTestSuiteId;
 
         @Inject
-        public XCTestProcessor(Clock clock, File executable, File workingDir, ExecHandleBuilder execHandleBuilder, IdGenerator<?> idGenerator, String rootTestSuiteId) {
+        public XCTestProcessor(Clock clock, File executable, File workingDir, ClientExecHandleBuilder execHandleBuilder, IdGenerator<?> idGenerator, String rootTestSuiteId) {
             this.execHandleBuilder = execHandleBuilder;
             this.idGenerator = idGenerator;
             this.clock = clock;
             this.rootTestSuiteId = rootTestSuiteId;
-            execHandleBuilder.executable(executable);
+            execHandleBuilder.setExecutable(executable.getAbsolutePath());
             execHandleBuilder.setWorkingDir(workingDir);
         }
 
@@ -176,7 +176,7 @@ public class XCTestExecuter implements TestExecuter<XCTestTestExecutionSpec> {
         }
 
         private static List<String> toTestArgs(String testName) {
-            List<String> args = Lists.newArrayList();
+            List<String> args = new ArrayList<>();
             if (!testName.equals(XCTestSelection.INCLUDE_ALL_TESTS)) {
                 if (OperatingSystem.current().isMacOsX()) {
                     args.add("-XCTest");

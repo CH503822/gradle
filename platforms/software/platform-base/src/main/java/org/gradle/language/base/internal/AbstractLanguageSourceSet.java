@@ -16,17 +16,18 @@
 
 package org.gradle.language.base.internal;
 
-import com.google.common.collect.Maps;
 import org.gradle.api.BuildableComponentSpec;
 import org.gradle.api.Task;
 import org.gradle.api.file.SourceDirectorySet;
 import org.gradle.api.internal.AbstractBuildableComponentSpec;
 import org.gradle.platform.base.internal.ComponentSpecIdentifier;
 
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public abstract class AbstractLanguageSourceSet extends AbstractBuildableComponentSpec implements LanguageSourceSetInternal {
-    private final static Map<String, String> LANGUAGES = Maps.newHashMap();
+    private final static Map<String, String> LANGUAGES = new HashMap<>();
 
     private final SourceDirectorySet source;
     private boolean generated;
@@ -83,7 +84,7 @@ public abstract class AbstractLanguageSourceSet extends AbstractBuildableCompone
     @Override
     public String getDisplayName() {
         String languageName = getLanguageName();
-        if (languageName.toLowerCase().endsWith("resources")) {
+        if (languageName.toLowerCase(Locale.ROOT).endsWith("resources")) {
             return languageName + " '" + getIdentifier().getPath() + "'";
         }
         return languageName + " source '" + getIdentifier().getPath() + "'";

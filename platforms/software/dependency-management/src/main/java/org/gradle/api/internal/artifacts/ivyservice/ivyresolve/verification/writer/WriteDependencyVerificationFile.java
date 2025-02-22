@@ -28,7 +28,6 @@ import org.gradle.api.artifacts.ArtifactView;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.GradleInternal;
-import org.gradle.api.internal.artifacts.configurations.ResolutionStrategyInternal;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.DependencyVerifyingModuleComponentRepository;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ModuleComponentRepository;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.verification.ArtifactVerificationOperation;
@@ -53,7 +52,7 @@ import org.gradle.api.logging.Logging;
 import org.gradle.internal.Factory;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier;
-import org.gradle.internal.component.external.model.ModuleComponentGraphResolveState;
+import org.gradle.internal.component.external.model.ExternalModuleComponentGraphResolveState;
 import org.gradle.internal.deprecation.DeprecatableConfiguration;
 import org.gradle.internal.hash.ChecksumService;
 import org.gradle.internal.operations.BuildOperationContext;
@@ -78,8 +77,10 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -175,7 +176,7 @@ public class WriteDependencyVerificationFile implements DependencyVerificationOv
     }
 
     @Override
-    public ModuleComponentRepository<ModuleComponentGraphResolveState> overrideDependencyVerification(ModuleComponentRepository<ModuleComponentGraphResolveState> original, String resolveContextName, ResolutionStrategyInternal resolutionStrategy) {
+    public ModuleComponentRepository<ExternalModuleComponentGraphResolveState> overrideDependencyVerification(ModuleComponentRepository<ExternalModuleComponentGraphResolveState> original) {
         return new DependencyVerifyingModuleComponentRepository(original, this, generatePgpInfo);
     }
 
@@ -253,7 +254,7 @@ public class WriteDependencyVerificationFile implements DependencyVerificationOv
     }
 
     private void exportKeys(SignatureVerificationService signatureVerificationService, DependencyVerifier verifier, BuildTreeDefinedKeys existingKeyring) throws IOException {
-        Set<String> keysToExport = Sets.newHashSet();
+        Set<String> keysToExport = new HashSet<>();
         verifier.getConfiguration()
             .getTrustedKeys()
             .stream()
@@ -599,7 +600,7 @@ public class WriteDependencyVerificationFile implements DependencyVerificationOv
                     boolean hasUid = false;
                     PGPPublicKey pk = pks.next();
                     String keyType = pk.isMasterKey() ? "pub" : "sub";
-                    out.write((keyType + "    " + SecuritySupport.toLongIdHexString(pk.getKeyID()).toUpperCase() + "\n").getBytes(StandardCharsets.US_ASCII));
+                    out.write((keyType + "    " + SecuritySupport.toLongIdHexString(pk.getKeyID()).toUpperCase(Locale.ROOT) + "\n").getBytes(StandardCharsets.US_ASCII));
                     List<String> userIDs = PGPUtils.getUserIDs(pk);
                     for(String uid : userIDs) {
                         hasUid = true;
@@ -612,7 +613,7 @@ public class WriteDependencyVerificationFile implements DependencyVerificationOv
             }
             // Then write the ascii armored keyring
             try (FileOutputStream fos = new FileOutputStream(ascii, true);
-                 ArmoredOutputStream out = new ArmoredOutputStream(fos)) {
+                 ArmoredOutputStream out = ArmoredOutputStream.builder().build(fos)) {
                 keyRing.encode(out, true);
             }
             hasKey = true;
@@ -630,6 +631,7 @@ public class WriteDependencyVerificationFile implements DependencyVerificationOv
     private static class PGPPublicKeyRingListBuilder implements PublicKeyResultBuilder {
         private final ImmutableList.Builder<PGPPublicKeyRing> builder = ImmutableList.builder();
 
+        @Override
         public void keyRing(PGPPublicKeyRing keyring) {
             builder.add(keyring);
         }

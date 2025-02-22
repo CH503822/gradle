@@ -19,7 +19,6 @@ package org.gradle.api.internal.provider;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
-import org.gradle.api.Action;
 import org.gradle.api.internal.lambdas.SerializableLambdas;
 
 import java.util.Map;
@@ -54,8 +53,8 @@ public class MapCollectors {
         }
 
         @Override
-        public void calculateExecutionTimeValue(Action<ExecutionTimeValue<? extends Map<? extends K, ? extends V>>> visitor) {
-            visitor.execute(ExecutionTimeValue.fixedValue(ImmutableMap.of(key, value)));
+        public ExecutionTimeValue<? extends Map<? extends K, ? extends V>> calculateExecutionTimeValue() {
+            return ExecutionTimeValue.fixedValue(ImmutableMap.of(key, value));
         }
 
         @Override
@@ -78,6 +77,11 @@ public class MapCollectors {
         @Override
         public int hashCode() {
             return Objects.hashCode(key, value);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("{%s=%s}", key, value);
         }
     }
 
@@ -116,22 +120,27 @@ public class MapCollectors {
         }
 
         @Override
-        public void calculateExecutionTimeValue(Action<ExecutionTimeValue<? extends Map<? extends K, ? extends V>>> visitor) {
+        public ExecutionTimeValue<? extends Map<? extends K, ? extends V>> calculateExecutionTimeValue() {
             ExecutionTimeValue<? extends V> value = providerOfValue.calculateExecutionTimeValue();
             if (value.isMissing()) {
-                visitor.execute(ExecutionTimeValue.missing());
+                return ExecutionTimeValue.missing();
             } else if (value.hasFixedValue()) {
                 // transform preserving side effects
-                visitor.execute(ExecutionTimeValue.value(value.toValue().transform(v -> ImmutableMap.of(key, v))));
+                return ExecutionTimeValue.value(value.toValue().transform(v -> ImmutableMap.of(key, v)));
             } else {
-                visitor.execute(ExecutionTimeValue.changingValue(
-                    value.getChangingValue().map(SerializableLambdas.transformer(v -> ImmutableMap.of(key, v)))));
+                return ExecutionTimeValue.changingValue(
+                    value.getChangingValue().map(SerializableLambdas.transformer(v -> ImmutableMap.of(key, v))));
             }
         }
 
         @Override
         public ValueProducer getProducer() {
             return providerOfValue.getProducer();
+        }
+
+        @Override
+        public String toString() {
+            return String.format("entry{%s=%s}", key, providerOfValue);
         }
     }
 
@@ -161,13 +170,18 @@ public class MapCollectors {
         }
 
         @Override
-        public void calculateExecutionTimeValue(Action<ExecutionTimeValue<? extends Map<? extends K, ? extends V>>> sources) {
-            sources.execute(ExecutionTimeValue.fixedValue(entries));
+        public ExecutionTimeValue<? extends Map<? extends K, ? extends V>> calculateExecutionTimeValue() {
+            return ExecutionTimeValue.fixedValue(entries);
         }
 
         @Override
         public ValueProducer getProducer() {
             return ValueProducer.unknown();
+        }
+
+        @Override
+        public String toString() {
+            return entries.toString();
         }
     }
 
@@ -205,13 +219,18 @@ public class MapCollectors {
         }
 
         @Override
-        public void calculateExecutionTimeValue(Action<ExecutionTimeValue<? extends Map<? extends K, ? extends V>>> visitor) {
-            visitor.execute(providerOfEntries.calculateExecutionTimeValue());
+        public ExecutionTimeValue<? extends Map<? extends K, ? extends V>> calculateExecutionTimeValue() {
+            return providerOfEntries.calculateExecutionTimeValue();
         }
 
         @Override
         public ValueProducer getProducer() {
             return providerOfEntries.getProducer();
+        }
+
+        @Override
+        public String toString() {
+            return String.valueOf(providerOfEntries);
         }
     }
 }

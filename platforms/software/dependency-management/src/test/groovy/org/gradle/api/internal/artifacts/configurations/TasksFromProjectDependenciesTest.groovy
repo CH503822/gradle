@@ -17,44 +17,56 @@
 
 package org.gradle.api.internal.artifacts.configurations
 
-import org.gradle.api.artifacts.DependencySet
-import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.api.artifacts.component.BuildIdentifier
 import org.gradle.api.internal.TaskInternal
+import org.gradle.api.internal.artifacts.dependencies.ProjectDependencyInternal
 import org.gradle.api.internal.file.TestFiles
+import org.gradle.api.internal.project.ProjectIdentity
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.project.ProjectState
+import org.gradle.api.internal.project.ProjectStateRegistry
 import org.gradle.api.internal.tasks.TaskContainerInternal
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.test.fixtures.AbstractProjectBuilderSpec
+import org.gradle.util.Path
 
-import java.util.function.Supplier
-
+/**
+ * Tests {@link TasksFromProjectDependencies}
+ */
 class TasksFromProjectDependenciesTest extends AbstractProjectBuilderSpec {
 
-    def dependencies = { Mock(DependencySet) } as Supplier<DependencySet>
     def context = Mock(TaskDependencyResolveContext)
     def project1State = Mock(ProjectState)
     def project2State = Mock(ProjectState)
     def project1 = Mock(ProjectInternal)
     def project2 = Mock(ProjectInternal)
-    def projectDep1 = Mock(ProjectDependency) { getDependencyProject() >> project1 }
-    def projectDep2 = Mock(ProjectDependency) { getDependencyProject() >> project2 }
+    def projectPath1 = Path.path("project1")
+    def projectPath2 = Path.path("project2")
+    def projectId1 = new ProjectIdentity(Mock(BuildIdentifier), projectPath1, projectPath1, "project1")
+    def projectId2 = new ProjectIdentity(Mock(BuildIdentifier), projectPath2, projectPath2, "project2")
+    def projectDep1 = Mock(ProjectDependencyInternal) { getTargetProjectIdentity() >> projectId1 }
+    def projectDep2 = Mock(ProjectDependencyInternal) { getTargetProjectIdentity() >> projectId2 }
     def tasks1 = Mock(TaskContainerInternal)
     def tasks2 = Mock(TaskContainerInternal)
+    ProjectStateRegistry projectStateRegistry
 
     def setup() {
-        _ * project1.owner >> project1State
         _ * project1.tasks >> tasks1
-        _ * project2.owner >> project2State
         _ * project2.tasks >> tasks2
+        _ * project1State.getMutableModel() >> project1
+        _ * project2State.getMutableModel() >> project2
+        projectStateRegistry = Mock(ProjectStateRegistry) {
+            stateFor(projectPath1) >> project1State
+            stateFor(projectPath2) >> project2State
+        }
     }
 
     def "provides tasks from project dependencies"() {
-        def tasks = new TasksFromProjectDependencies("buildNeeded", dependencies, TestFiles.taskDependencyFactory())
+        def tasks = new TasksFromProjectDependencies("buildNeeded", () -> [projectDep1, projectDep2] as Set, TestFiles.taskDependencyFactory(), projectStateRegistry)
         def task = Mock(TaskInternal)
 
         when:
-        tasks.resolveProjectDependencies(context, [projectDep1, projectDep2] as Set)
+        tasks.visitDependencies(context)
 
         then:
         1 * project1State.ensureTasksDiscovered()

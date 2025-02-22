@@ -64,7 +64,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                 }
                 failOnVersionConflict()
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -111,7 +111,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     }
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -161,7 +161,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     }
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -211,7 +211,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     }
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -250,7 +250,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     }
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -291,7 +291,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     substitute module("org.utils:api") using module("org.utils:api:1.6")
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -333,7 +333,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     assert deps[0].selected.selectionReason.selectedByRule
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -347,21 +347,20 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "can substitute modules with project dependency using #name"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf group: "org.utils", name: "api", version: "1.5", configuration: "conf"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("$selector") using project(":api")
-                }
+            dependencies {
+                conf group: "org.utils", name: "api", version: "1.5", configuration: "conf"
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("$selector") using project(":api")
+            }
+        """
 
         when:
         run ":impl:checkDeps"
@@ -386,46 +385,47 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "can access built artifacts from substituted project dependency"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+
+        file("api/build.gradle") << """
             $common
 
-            project(":api") {
-                task build {
-                    def outFile = file("artifact.txt")
-                    outputs.file(outFile)
-                    doLast {
-                        outFile << "Lajos"
-                    }
-                }
-
-                artifacts {
-                    conf (file("artifact.txt")) {
-                        builtBy build
-                    }
+            task build {
+                def outFile = file("artifact.txt")
+                outputs.file(outFile)
+                doLast {
+                    outFile << "Lajos"
                 }
             }
 
-            project(":impl") {
-                dependencies {
-                    conf group: "org.utils", name: "api", version: "1.5"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api") using project(":api")
-                }
-
-                task check(dependsOn: configurations.conf) {
-                    def files = configurations.conf
-                    doLast {
-                        assert files*.name.sort() == ["api.jar", "artifact.txt"]
-                        assert files[1].text == "Lajos"
-                    }
+            artifacts {
+                conf (file("artifact.txt")) {
+                    builtBy build
                 }
             }
-"""
+        """
+
+        file("impl/build.gradle") << """
+            $common
+
+            dependencies {
+                conf group: "org.utils", name: "api", version: "1.5"
+            }
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api") using project(":api")
+            }
+
+            task check(dependsOn: configurations.conf) {
+                def files = configurations.conf
+                doLast {
+                    assert files*.name.sort() == ["api.jar", "artifact.txt"]
+                    assert files[1].text == "Lajos"
+                }
+            }
+        """
 
         when:
         succeeds ":impl:check"
@@ -437,25 +437,27 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     void "can replace project dependency #projectGroup:api:#projectVersion with external dependency org.utils:api:1.5"() {
         mavenRepo.module("org.utils", "api", '1.5').publish()
 
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
-            $common
-            project(":api") {
-                group = "$projectGroup"
-                version = "$projectVersion"
-            }
-            project(":impl") {
-                dependencies {
-                    conf project(path: ":api")
-                }
+        buildFile << common
 
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute project(":api") using module("org.utils:api:1.5")
-                }
+        file("api/build.gradle") << """
+            $common
+            group = "$projectGroup"
+            version = "$projectVersion"
+        """
+
+        file("impl/build.gradle") << """
+            $common
+
+            dependencies {
+                conf project(path: ":api")
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute project(":api") using module("org.utils:api:1.5")
+            }
+        """
 
         when:
         run ":impl:checkDeps"
@@ -481,24 +483,24 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
 
     void "can replace transitive external dependency with project dependency"() {
         mavenRepo.module("org.utils", "impl", '1.5').dependsOn('org.utils', 'api', '1.5').publish()
-        createDirs("api", "test")
         settingsFile << 'include "api", "test"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("test/build.gradle") << """
             $common
 
-            project(":test") {
-                dependencies {
-                    conf group: "org.utils", name: "impl", version: "1.5"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api") using project(":api")
-                }
-
-                task("buildConf", dependsOn: configurations.conf)
+            dependencies {
+                conf group: "org.utils", name: "impl", version: "1.5"
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api") using project(":api")
+            }
+
+            task("buildConf", dependsOn: configurations.conf)
+        """
 
         when:
         run ":test:checkDeps"
@@ -520,39 +522,40 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "can replace client module dependency with project dependency"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf module(group: "org.utils", name: "api", version: "1.5")
-                }
+            dependencies {
+                conf module(group: "org.utils", name: "api", version: "1.5")
+            }
 
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api") using project(":api")
-                }
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api") using project(":api")
+            }
 
-                task check {
-                    doLast {
-                        def deps = configurations.conf.incoming.resolutionResult.allDependencies as List
-                        assert deps.size() == 1
-                        assert deps[0] instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult
+            task check {
+                doLast {
+                    def deps = configurations.conf.incoming.resolutionResult.allDependencies as List
+                    assert deps.size() == 1
+                    assert deps[0] instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult
 
-                        assert deps[0].requested.matchesStrictly(moduleId("org.utils", "api", "1.5"))
-                        assert deps[0].selected.componentId == projectId(":api")
+                    assert deps[0].requested.matchesStrictly(moduleId("org.utils", "api", "1.5"))
+                    assert deps[0].selected.componentId == projectId(":api")
 
-                        assert !deps[0].selected.selectionReason.forced
-                        assert deps[0].selected.selectionReason.selectedByRule
-                    }
+                    assert !deps[0].selected.selectionReason.forced
+                    assert deps[0].selected.selectionReason.selectedByRule
                 }
             }
-"""
+        """
 
 
         when:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         run ":impl:checkDeps"
 
         then:
@@ -567,27 +570,28 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "can replace client module's transitive dependency with project dependency"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
         mavenRepo.module("org.utils", "bela", '1.5').publish()
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf module(group: "org.utils", name: "bela", version: "1.5") {
-                        dependencies group: "org.utils", name: "api", version: "1.5"
-                    }
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api") using project(":api")
+            dependencies {
+                conf module(group: "org.utils", name: "bela", version: "1.5") {
+                    dependencies group: "org.utils", name: "api", version: "1.5"
                 }
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api") using project(":api")
+            }
+        """
 
         when:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         run ":impl:checkDeps"
 
         then:
@@ -607,27 +611,27 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     void "can replace external dependency declared in extended configuration with project dependency"() {
         mavenRepo.module("org.utils", "api", '1.5').publish()
 
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                configurations {
-                    subConf
-                    conf.extendsFrom subConf
-                }
-
-                dependencies {
-                    subConf group: "org.utils", name: "api", version: "1.5"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api") using project(":api")
-                }
+            configurations {
+                subConf
+                conf.extendsFrom subConf
             }
-"""
+
+            dependencies {
+                subConf group: "org.utils", name: "api", version: "1.5"
+            }
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api") using project(":api")
+            }
+        """
 
         when:
         run ":impl:checkDeps"
@@ -644,26 +648,26 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "can replace forced external dependency with project dependency"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf group: "org.utils", name: "api", version: "1.5"
-                }
+            dependencies {
+                conf group: "org.utils", name: "api", version: "1.5"
+            }
 
-                configurations.conf.resolutionStrategy {
-                    force("org.utils:api:1.3")
+            configurations.conf.resolutionStrategy {
+                force("org.utils:api:1.3")
 
-                    dependencySubstitution {
-                        substitute module("org.utils:api") using project(":api")
-                    }
+                dependencySubstitution {
+                    substitute module("org.utils:api") using project(":api")
                 }
             }
-"""
+        """
 
         when:
         run ":impl:checkDeps"
@@ -681,53 +685,52 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     }
 
     void "get useful error message when replacing an external dependency with a project that does not exist"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf group: "org.utils", name: "api", version: "1.5"
-                }
+            dependencies {
+                conf group: "org.utils", name: "api", version: "1.5"
+            }
 
-                configurations.conf.resolutionStrategy {
-                    force("org.utils:api:1.3")
+            configurations.conf.resolutionStrategy {
+                force("org.utils:api:1.3")
 
-                    dependencySubstitution {
-                        substitute module("org.utils:api") using project(":doesnotexist")
-                    }
+                dependencySubstitution {
+                    substitute module("org.utils:api") using project(":doesnotexist")
                 }
             }
-"""
-
+        """
 
         when:
         fails ":impl:checkDeps"
 
         then:
-        failure.assertHasDescription("A problem occurred evaluating root project 'depsub'.")
+        failure.assertHasDescription("A problem occurred evaluating project ':impl'.")
         failure.assertHasCause("Project with path ':doesnotexist' not found in build ':'.")
     }
 
     void "replacing external module dependency with project dependency keeps the original configuration"() {
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf group: "org.utils", name: "api", version: "1.5", configuration: "conf"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:api:1.5") using project(":api")
-                }
+            dependencies {
+                conf group: "org.utils", name: "api", version: "1.5", configuration: "conf"
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:api:1.5") using project(":api")
+            }
+        """
 
         when:
         run ":impl:checkDeps"
@@ -745,22 +748,22 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
 
     void "replacing external module dependency with project dependency keeps the original transitivity"() {
         mavenRepo.module("org.utils", "impl", '1.5').dependsOn('org.utils', 'api', '1.5').publish()
-        createDirs("impl", "test")
         settingsFile << 'include "impl", "test"'
 
-        buildFile << """
+        buildFile << common
+        file("impl/build.gradle") << common
+
+        file("test/build.gradle") << """
             $common
 
-            project(":test") {
-                dependencies {
-                    conf (group: "org.utils", name: "impl", version: "1.5") { transitive = false }
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:impl") using project(":impl")
-                }
+            dependencies {
+                conf (group: "org.utils", name: "impl", version: "1.5") { transitive = false }
             }
-"""
+
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:impl") using project(":impl")
+            }
+        """
 
         when:
         run ":test:checkDeps"
@@ -779,50 +782,50 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     void "external dependency substituted for a project dependency participates in conflict resolution"() {
         mavenRepo.module("org.utils", "api", '2.0').publish()
 
-        createDirs("api", "impl")
         settingsFile << 'include "api", "impl"'
 
-        buildFile << """
+        buildFile << common
+        file("api/build.gradle") << common
+
+        file("impl/build.gradle") << """
             $common
 
-            project(":impl") {
-                dependencies {
-                    conf project(":api")
-                    conf "org.utils:api:2.0"
-                }
+            dependencies {
+                conf project(":api")
+                conf "org.utils:api:2.0"
+            }
 
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute project(":api") using module("org.utils:api:1.6")
-                }
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute project(":api") using module("org.utils:api:1.6")
+            }
 
-                task check {
-                    doLast {
-                        def deps = configurations.conf.incoming.resolutionResult.allDependencies as List
-                        assert deps.size() == 2
-                        assert deps.find {
-                            it instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult &&
-                            it.requested.matchesStrictly(projectId(":api")) &&
-                            it.selected.componentId == moduleId("org.utils", "api", "2.0") &&
-                            !it.selected.selectionReason.forced &&
-                            !it.selected.selectionReason.selectedByRule &&
-                            it.selected.selectionReason.conflictResolution
-                        }
-                        assert deps.find {
-                            it instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult &&
-                            it.requested.matchesStrictly(moduleId("org.utils", "api", "2.0")) &&
-                            it.selected.componentId == moduleId("org.utils", "api", "2.0") &&
-                            !it.selected.selectionReason.forced &&
-                            !it.selected.selectionReason.selectedByRule &&
-                            it.selected.selectionReason.conflictResolution
-                        }
-
-                        def resolvedDeps = configurations.conf.resolvedConfiguration.firstLevelModuleDependencies
-                        resolvedDeps.size() == 1
-                        resolvedDeps[0].module.id == moduleId("org.utils", "api", "2.0")
+            task check {
+                doLast {
+                    def deps = configurations.conf.incoming.resolutionResult.allDependencies as List
+                    assert deps.size() == 2
+                    assert deps.find {
+                        it instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult &&
+                        it.requested.matchesStrictly(projectId(":api")) &&
+                        it.selected.componentId == moduleId("org.utils", "api", "2.0") &&
+                        !it.selected.selectionReason.forced &&
+                        !it.selected.selectionReason.selectedByRule &&
+                        it.selected.selectionReason.conflictResolution
                     }
+                    assert deps.find {
+                        it instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult &&
+                        it.requested.matchesStrictly(moduleId("org.utils", "api", "2.0")) &&
+                        it.selected.componentId == moduleId("org.utils", "api", "2.0") &&
+                        !it.selected.selectionReason.forced &&
+                        !it.selected.selectionReason.selectedByRule &&
+                        it.selected.selectionReason.conflictResolution
+                    }
+
+                    def resolvedDeps = configurations.conf.resolvedConfiguration.firstLevelModuleDependencies
+                    resolvedDeps.size() == 1
+                    resolvedDeps[0].module.id == moduleId("org.utils", "api", "2.0")
                 }
             }
-"""
+        """
 
         when:
         run ":impl:checkDeps"
@@ -839,39 +842,42 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
     void "project dependency substituted for an external dependency participates in conflict resolution"() {
         mavenRepo.module("org.utils", "dep1", '2.0').publish()
         mavenRepo.module("org.utils", "dep2", '2.0').publish()
-        createDirs("impl", "dep1", "dep2")
         settingsFile << 'include "impl", "dep1", "dep2"'
 
-        buildFile << """
+        buildFile << common
+
+        file("dep1/build.gradle") << """
             $common
 
-            project(":dep1") {
-                group "org.utils"
-                version = '1.6'
+            group = "org.utils"
+            version = '1.6'
+        """
+
+        file("dep2/build.gradle") << """
+            $common
+
+            group = "org.utils"
+            version = '3.0'
+
+            jar.archiveVersion = '3.0'
+        """
+
+        file("impl/build.gradle") << """
+            $common
+
+            dependencies {
+                conf "org.utils:dep1:1.5"
+                conf "org.utils:dep1:2.0"
+
+                conf "org.utils:dep2:1.5"
+                conf "org.utils:dep2:2.0"
             }
 
-            project(":dep2") {
-                group "org.utils"
-                version = '3.0'
-
-                jar.archiveVersion = '3.0'
+            configurations.conf.resolutionStrategy.dependencySubstitution {
+                substitute module("org.utils:dep1:1.5") using project(":dep1")
+                substitute module("org.utils:dep2:1.5") using project(":dep2")
             }
-
-            project(":impl") {
-                dependencies {
-                    conf "org.utils:dep1:1.5"
-                    conf "org.utils:dep1:2.0"
-
-                    conf "org.utils:dep2:1.5"
-                    conf "org.utils:dep2:2.0"
-                }
-
-                configurations.conf.resolutionStrategy.dependencySubstitution {
-                    substitute module("org.utils:dep1:1.5") using project(":dep1")
-                    substitute module("org.utils:dep2:1.5") using project(":dep2")
-                }
-            }
-"""
+        """
 
         when:
         run ":impl:checkDeps"
@@ -912,7 +918,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('org.utils:a:1.2') using module('org.utils:a:1.4')
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -943,7 +949,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('org.utils:a:1.2') using module('org.utils:a:1.2.1')
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -977,7 +983,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     it.useTarget group: it.requested.group, name: it.requested.module, version: '1.3'
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -1006,7 +1012,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     it.useTarget group: it.requested.group, name: it.requested.module, version: '1.3'
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -1048,7 +1054,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     assert deps[0].requested.version == '1.3'
                 }
             }
-"""
+        """
 
         when:
         succeeds "check"
@@ -1104,7 +1110,7 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     assert requested == [ 'api:1.3', 'api:1.5', 'bar:2.0', 'foo:2.0', 'impl:1.3']
                 }
             }
-"""
+        """
 
         expect:
         succeeds "check"
@@ -1134,16 +1140,16 @@ class DependencySubstitutionRulesIntegrationTest extends AbstractIntegrationSpec
                     }
                 }
             }
-"""
+        """
 
         when:
         fails "checkDeps"
 
         then:
-        failure.assertHasCause("Could not resolve all task dependencies for configuration ':conf'.")
+        failure.assertHasCause("Could not resolve all dependencies for configuration ':conf'.")
         failure.assertHasCause("""Could not resolve org.utils:impl:1.3.
 Required by:
-    project :""")
+    root project :""")
         failure.assertHasCause("Unhappy :(")
     }
 
@@ -1185,7 +1191,7 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module(":foo:bar:baz:") using module("")
             }
-"""
+        """
 
         when:
         fails "checkDeps"
@@ -1211,7 +1217,7 @@ Required by:
                     it.useTarget moduleSelector
                 }
             }
-"""
+        """
 
         when:
         fails "checkDeps"
@@ -1235,7 +1241,7 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('org.utils:a:1.2') using module('org.utils:b:2.1')
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -1269,7 +1275,7 @@ Required by:
                     it.useTarget('org:' + it.requested.module + ':' + it.requested.version)
                 }
             }
-"""
+        """
 
         when:
         run "checkDeps"
@@ -1307,8 +1313,7 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('foo:bar:baz') using module('org:b:1.0')
             }
-"""
-
+        """
 
         when:
         run "checkDeps"
@@ -1339,13 +1344,13 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution.all {
                 it.useTarget "foobar"
             }
-"""
+        """
 
         when:
         fails "checkDeps"
 
         then:
-        failure.assertHasCause("Could not resolve all task dependencies for configuration ':conf'.")
+        failure.assertHasCause("Could not resolve all dependencies for configuration ':conf'.")
         failure.assertHasCause("Invalid format: 'foobar'")
     }
 
@@ -1364,8 +1369,7 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('org:a:1.0') using module('org:c:1.1')
             }
-"""
-
+        """
 
         when:
         run "checkDeps"
@@ -1388,26 +1392,24 @@ Required by:
 
     String getCommon() {
         """
-        allprojects {
-            configurations {
-                conf
-            }
-            configurations.create("default").extendsFrom(configurations.conf)
-
-            repositories {
-                maven { url "${mavenRepo.uri}" }
-            }
-
-            task jar(type: Jar) {
-                archiveBaseName = project.name
-                // TODO LJA: No idea why I have to do this
-                if (project.version != 'unspecified') {
-                    archiveFileName = "\${project.name}-\${project.version}.jar"
-                }
-                destinationDirectory = buildDir
-            }
-            artifacts { conf jar }
+        configurations {
+            conf
         }
+        configurations.create("default").extendsFrom(configurations.conf)
+
+        repositories {
+            maven { url = "${mavenRepo.uri}" }
+        }
+
+        task jar(type: Jar) {
+            archiveBaseName = project.name
+            // TODO LJA: No idea why I have to do this
+            if (project.version != 'unspecified') {
+                archiveFileName = "\${project.name}-\${project.version}.jar"
+            }
+            destinationDirectory = buildDir
+        }
+        artifacts { conf jar }
 
         def moduleId(String group, String name, String version) {
             return org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier.newId(group, name, version)
@@ -1437,8 +1439,7 @@ Required by:
             configurations.conf.resolutionStrategy.dependencySubstitution {
                 substitute module('foo:bar:baz') because('we need integration tests') using module('org:b:1.0')
             }
-"""
-
+        """
 
         when:
         run "checkDeps"
@@ -1460,31 +1461,31 @@ Required by:
 
     @Issue("gradle/gradle#5692")
     def 'substitution with project does not trigger failOnVersionConflict'() {
-        createDirs("sub")
         settingsFile << 'include "sub"'
         buildFile << """
-subprojects {
-    it.version = '0.0.1'
-    group = 'org.test'
-}
+            $common
 
-$common
+            dependencies {
+                conf 'foo:bar:1'
+                conf project(':sub')
+            }
 
-dependencies {
-    conf 'foo:bar:1'
-    conf project(':sub')
-}
+            configurations.all {
+                resolutionStrategy {
+                    dependencySubstitution { DependencySubstitutions subs ->
+                        subs.substitute(subs.module('foo:bar:1')).using(subs.project(':sub'))
+                    }
+                    failOnVersionConflict()
+                }
+            }
+        """
 
-configurations.all {
-  resolutionStrategy {
-      dependencySubstitution { DependencySubstitutions subs ->
-          subs.substitute(subs.module('foo:bar:1')).using(subs.project(':sub'))
-      }
-      failOnVersionConflict()
-  }
-}
+        file("sub/build.gradle") << """
+            version = '0.0.1'
+            group = 'org.test'
 
-"""
+            $common
+        """
 
         when:
         succeeds ':checkDeps'
@@ -1542,7 +1543,7 @@ configurations.all {
         buildFile << """
 
             repositories {
-                maven { url "${mavenRepo.uri}" }
+                maven { url = "${mavenRepo.uri}" }
             }
 
             configurations {
@@ -1615,7 +1616,7 @@ configurations.all {
         buildFile << """
 
             repositories {
-                maven { url "${mavenRepo.uri}" }
+                maven { url = "${mavenRepo.uri}" }
             }
 
             configurations {
@@ -1657,7 +1658,6 @@ configurations.all {
             .dependencyConstraint(fooModule)
             .publish()
 
-        createDirs("lib")
         settingsFile << """
             include 'lib'
         """

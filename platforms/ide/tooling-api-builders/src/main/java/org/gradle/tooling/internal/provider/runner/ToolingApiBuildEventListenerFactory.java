@@ -17,27 +17,23 @@
 package org.gradle.tooling.internal.provider.runner;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
+import org.gradle.api.NonNullApi;
 import org.gradle.initialization.BuildEventConsumer;
 import org.gradle.internal.build.event.BuildEventListenerFactory;
 import org.gradle.internal.build.event.BuildEventSubscriptions;
 import org.gradle.internal.build.event.OperationResultPostProcessor;
 import org.gradle.internal.build.event.OperationResultPostProcessorFactory;
 import org.gradle.internal.operations.BuildOperationAncestryTracker;
-import org.gradle.internal.operations.BuildOperationDescriptor;
 import org.gradle.internal.operations.BuildOperationIdFactory;
 import org.gradle.internal.operations.BuildOperationListener;
-import org.gradle.internal.operations.OperationFinishEvent;
 import org.gradle.internal.operations.OperationIdentifier;
-import org.gradle.internal.operations.OperationProgressEvent;
-import org.gradle.internal.operations.OperationStartEvent;
 import org.gradle.tooling.events.OperationType;
 
-import java.util.ArrayList;
 import java.util.List;
 
-import static java.util.Collections.emptyList;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
+@NonNullApi
 public class ToolingApiBuildEventListenerFactory implements BuildEventListenerFactory {
     private final BuildOperationAncestryTracker ancestryTracker;
     private final BuildOperationIdFactory idFactory;
@@ -52,15 +48,19 @@ public class ToolingApiBuildEventListenerFactory implements BuildEventListenerFa
     @Override
     public Iterable<Object> createListeners(BuildEventSubscriptions subscriptions, BuildEventConsumer consumer) {
         if (!subscriptions.isAnyOperationTypeRequested()) {
-            return emptyList();
+            return ImmutableList.of();
         }
 
         ProgressEventConsumer progressEventConsumer = new ProgressEventConsumer(consumer, ancestryTracker);
 
-        Builder<Object> listeners = ImmutableList.builder();
+        ImmutableList.Builder<Object> listeners = ImmutableList.builder();
 
         if (subscriptions.isRequested(OperationType.TEST) && subscriptions.isRequested(OperationType.TEST_OUTPUT)) {
             listeners.add(new ClientForwardingTestOutputOperationListener(progressEventConsumer, idFactory));
+        }
+
+        if (subscriptions.isRequested(OperationType.TEST) && subscriptions.isRequested(OperationType.TEST_METADATA)) {
+            listeners.add(new ClientForwardingTestMetadataOperationListener(progressEventConsumer, idFactory));
         }
 
         if (subscriptions.isRequested(OperationType.BUILD_PHASE)) {
@@ -77,22 +77,19 @@ public class ToolingApiBuildEventListenerFactory implements BuildEventListenerFa
         OperationDependenciesResolver operationDependenciesResolver = new OperationDependenciesResolver();
 
         PluginApplicationTracker pluginApplicationTracker = new PluginApplicationTracker(ancestryTracker);
-        TestTaskExecutionTracker testTaskTracker = new TestTaskExecutionTracker(ancestryTracker);
+        TaskForTestEventTracker testTaskTracker = new TaskForTestEventTracker(ancestryTracker);
         ProjectConfigurationTracker projectConfigurationTracker = new ProjectConfigurationTracker(ancestryTracker, pluginApplicationTracker);
         TaskOriginTracker taskOriginTracker = new TaskOriginTracker(pluginApplicationTracker);
 
         TransformOperationMapper transformOperationMapper = new TransformOperationMapper(operationDependenciesResolver);
         operationDependenciesResolver.addLookup(transformOperationMapper);
 
-        List<OperationResultPostProcessor> postProcessors = new ArrayList<>(postProcessorFactories.size());
-        for (OperationResultPostProcessorFactory postProcessorFactory : postProcessorFactories) {
-            postProcessors.addAll(postProcessorFactory.createProcessors(subscriptions, consumer));
-        }
+        List<OperationResultPostProcessor> postProcessors = createPostProcessors(subscriptions, consumer);
 
         TaskOperationMapper taskOperationMapper = new TaskOperationMapper(postProcessors, taskOriginTracker, operationDependenciesResolver);
         operationDependenciesResolver.addLookup(taskOperationMapper);
 
-        ImmutableList<BuildOperationMapper<?, ?>> mappers = ImmutableList.of(
+        List<BuildOperationMapper<?, ?>> mappers = ImmutableList.of(
             new FileDownloadOperationMapper(),
             new TestOperationMapper(testTaskTracker),
             new ProjectConfigurationOperationMapper(projectConfigurationTracker),
@@ -103,27 +100,15 @@ public class ToolingApiBuildEventListenerFactory implements BuildEventListenerFa
         return new ClientBuildEventGenerator(progressEventConsumer, subscriptions, mappers, buildListener);
     }
 
-    private BuildOperationListener createBuildOperationListener(BuildEventSubscriptions subscriptions, ProgressEventConsumer progressEventConsumer) {
-        if (subscriptions.isRequested(OperationType.PROBLEMS)) {
-            return new ProblemsProgressEventConsumer(progressEventConsumer, idFactory);
-        }
-        if (subscriptions.isRequested(OperationType.GENERIC)) {
-            return new ClientForwardingBuildOperationListener(progressEventConsumer);
-        }
-        return NO_OP;
+    private List<OperationResultPostProcessor> createPostProcessors(BuildEventSubscriptions subscriptions, BuildEventConsumer consumer) {
+        return postProcessorFactories.stream()
+            .map(factory -> factory.createProcessors(subscriptions, consumer))
+            .flatMap(List::stream)
+            .collect(toImmutableList());
     }
 
-    private static final BuildOperationListener NO_OP = new BuildOperationListener() {
-        @Override
-        public void started(BuildOperationDescriptor buildOperation, OperationStartEvent startEvent) {
-        }
-
-        @Override
-        public void progress(OperationIdentifier buildOperationId, OperationProgressEvent progressEvent) {
-        }
-
-        @Override
-        public void finished(BuildOperationDescriptor buildOperation, OperationFinishEvent finishEvent) {
-        }
-    };
+    private BuildOperationListener createBuildOperationListener(BuildEventSubscriptions subscriptions, ProgressEventConsumer progressEventConsumer) {
+        // TODO (donat) think of a better name for this class
+        return new ClientForwardingBuildOperationListener(progressEventConsumer, subscriptions, () -> new OperationIdentifier(idFactory.nextId()));
+    }
 }

@@ -28,6 +28,7 @@ import org.gradle.internal.taskgraph.CalculateTaskGraphBuildOperationType
 import org.gradle.internal.taskgraph.CalculateTreeTaskGraphBuildOperationType
 import org.gradle.launcher.exec.RunBuildBuildOperationType
 import org.gradle.operations.lifecycle.FinishRootBuildTreeBuildOperationType
+import org.gradle.operations.lifecycle.RunRequestedWorkBuildOperationType
 import org.gradle.test.precondition.Requires
 import org.gradle.test.preconditions.IntegTestPreconditions
 import org.junit.Assume
@@ -37,7 +38,6 @@ import java.util.regex.Pattern
 import static org.gradle.util.internal.TextUtil.getPlatformLineSeparator
 
 class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildIntegrationTest {
-    private static final Pattern RUN_MAIN_TASKS = Pattern.compile("Run main tasks")
     BuildTestFile buildB
 
     def setup() {
@@ -126,7 +126,7 @@ class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildInte
         taskGraphOps[1].details.buildPath == ":buildB"
         taskGraphOps[1].parentId == treeTaskGraphOps[0].id
 
-        def runMainTasks = operations.first(RUN_MAIN_TASKS)
+        def runMainTasks = operations.only(RunRequestedWorkBuildOperationType)
         runMainTasks.parentId == root.id
 
         def runTasksOps = operations.all(Pattern.compile("Run tasks.*"))
@@ -242,7 +242,7 @@ class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildInte
         def treeTaskGraphOps = operations.all(CalculateTreeTaskGraphBuildOperationType)
         treeTaskGraphOps.size() == 2
         treeTaskGraphOps[0].displayName == "Calculate build tree task graph"
-        treeTaskGraphOps[0].parentId == applyRootProjectBuildScript.id
+        applyRootProjectBuildScript in operations.parentsOf(treeTaskGraphOps[0])
         treeTaskGraphOps[1].displayName == "Calculate build tree task graph"
         treeTaskGraphOps[1].parentId == root.id
 
@@ -321,7 +321,7 @@ class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildInte
         def treeTaskGraphOps = operations.all(CalculateTreeTaskGraphBuildOperationType)
         treeTaskGraphOps.size() == 2
         treeTaskGraphOps[0].displayName == "Calculate build tree task graph"
-        treeTaskGraphOps[0].parentId == applyRootProjectBuildScript.id
+        applyRootProjectBuildScript in operations.parentsOf(treeTaskGraphOps[0])
         treeTaskGraphOps[1].displayName == "Calculate build tree task graph"
         treeTaskGraphOps[1].parentId == root.id
 
@@ -338,14 +338,14 @@ class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildInte
         taskGraphOps[2].details.buildPath == ":buildB"
         taskGraphOps[2].parentId == treeTaskGraphOps[1].id
 
-        def runMainTasks = operations.first(RUN_MAIN_TASKS)
+        def runMainTasks = operations.only(RunRequestedWorkBuildOperationType)
         runMainTasks.parentId == root.id
 
         // Tasks are run for buildB multiple times, once for buildscript dependency and again for production dependency
         def runTasksOps = operations.all(Pattern.compile("Run tasks.*"))
         runTasksOps.size() == 3
         runTasksOps[0].displayName == "Run tasks (:buildB)"
-        runTasksOps[0].parentId == applyRootProjectBuildScript.id
+        applyRootProjectBuildScript in operations.parentsOf(runTasksOps[0])
         // Build operations are run in parallel, so can appear in either order
         [runTasksOps[1].displayName, runTasksOps[2].displayName].sort() == ["Run tasks", "Run tasks (:buildB)"]
         runTasksOps[1].parentId == runMainTasks.id
@@ -449,7 +449,7 @@ class CompositeBuildOperationsIntegrationTest extends AbstractCompositeBuildInte
         then:
         executed ":buildB:compileJava"
 
-        operations.none(RUN_MAIN_TASKS)
+        operations.none(RunRequestedWorkBuildOperationType)
         operations.only(FinishRootBuildTreeBuildOperationType)
     }
 

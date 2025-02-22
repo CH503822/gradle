@@ -34,12 +34,11 @@ import org.gradle.internal.execution.history.OverlappingOutputs;
 import org.gradle.internal.execution.history.changes.InputChangesInternal;
 import org.gradle.internal.execution.model.InputNormalizer;
 import org.gradle.internal.fingerprint.CurrentFileCollectionFingerprint;
-import org.gradle.internal.hash.Hasher;
 import org.gradle.internal.hash.Hashing;
 import org.gradle.internal.operations.BuildOperationContext;
 import org.gradle.internal.operations.BuildOperationDescriptor;
-import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.operations.BuildOperationProgressEventEmitter;
+import org.gradle.internal.operations.BuildOperationRunner;
 import org.gradle.internal.operations.CallableBuildOperation;
 import org.gradle.internal.operations.UncategorizedBuildOperations;
 import org.gradle.internal.properties.PropertyValue;
@@ -47,6 +46,8 @@ import org.gradle.internal.snapshot.ValueSnapshot;
 import org.gradle.operations.dependencies.transforms.ExecuteTransformActionBuildOperationType;
 import org.gradle.operations.dependencies.transforms.IdentifyTransformExecutionProgressDetails;
 import org.gradle.operations.dependencies.transforms.SnapshotTransformInputsBuildOperationType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import javax.annotation.OverridingMethodsMustInvokeSuper;
@@ -60,7 +61,11 @@ import static org.gradle.internal.properties.InputBehavior.INCREMENTAL;
 import static org.gradle.internal.properties.InputBehavior.NON_INCREMENTAL;
 
 abstract class AbstractTransformExecution implements UnitOfWork {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractTransformExecution.class);
     private static final CachingDisabledReason NOT_CACHEABLE = new CachingDisabledReason(CachingDisabledReasonCategory.NOT_CACHEABLE, "Caching not enabled.");
+    private static final CachingDisabledReason CACHING_DISABLED_REASON = new CachingDisabledReason(CachingDisabledReasonCategory.NOT_CACHEABLE, "Caching disabled by property ('org.gradle.internal.transform-caching-disabled')");
+
     protected static final String INPUT_ARTIFACT_PROPERTY_NAME = "inputArtifact";
     private static final String OUTPUT_DIRECTORY_PROPERTY_NAME = "outputDirectory";
     private static final String RESULTS_FILE_PROPERTY_NAME = "resultsFile";
@@ -76,12 +81,13 @@ abstract class AbstractTransformExecution implements UnitOfWork {
     private final TransformStepSubject subject;
 
     private final TransformExecutionListener transformExecutionListener;
-    private final BuildOperationExecutor buildOperationExecutor;
+    private final BuildOperationRunner buildOperationRunner;
     private final BuildOperationProgressEventEmitter progressEventEmitter;
     private final FileCollectionFactory fileCollectionFactory;
 
     private final Provider<FileSystemLocation> inputArtifactProvider;
     protected final InputFingerprinter inputFingerprinter;
+    private final boolean disableCachingByProperty;
 
     private BuildOperationContext operationContext;
 
@@ -90,12 +96,12 @@ abstract class AbstractTransformExecution implements UnitOfWork {
         File inputArtifact,
         TransformDependencies dependencies,
         TransformStepSubject subject,
-
         TransformExecutionListener transformExecutionListener,
-        BuildOperationExecutor buildOperationExecutor,
+        BuildOperationRunner buildOperationRunner,
         BuildOperationProgressEventEmitter progressEventEmitter,
         FileCollectionFactory fileCollectionFactory,
-        InputFingerprinter inputFingerprinter
+        InputFingerprinter inputFingerprinter,
+        boolean disableCachingByProperty
     ) {
         this.transform = transform;
         this.inputArtifact = inputArtifact;
@@ -104,10 +110,11 @@ abstract class AbstractTransformExecution implements UnitOfWork {
         this.subject = subject;
         this.transformExecutionListener = transformExecutionListener;
 
-        this.buildOperationExecutor = buildOperationExecutor;
+        this.buildOperationRunner = buildOperationRunner;
         this.progressEventEmitter = progressEventEmitter;
         this.fileCollectionFactory = fileCollectionFactory;
         this.inputFingerprinter = inputFingerprinter;
+        this.disableCachingByProperty = disableCachingByProperty;
     }
 
     @Override
@@ -135,10 +142,13 @@ abstract class AbstractTransformExecution implements UnitOfWork {
     }
 
     private WorkOutput executeWithinTransformerListener(ExecutionRequest executionRequest) {
-        TransformExecutionResult result = buildOperationExecutor.call(new CallableBuildOperation<TransformExecutionResult>() {
+        TransformExecutionResult result = buildOperationRunner.call(new CallableBuildOperation<TransformExecutionResult>() {
             @Override
             public TransformExecutionResult call(BuildOperationContext context) {
                 try {
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("Transforming {} with {}", subject.getDisplayName(), transform.getDisplayName());
+                    }
                     File workspace = executionRequest.getWorkspace();
                     InputChangesInternal inputChanges = executionRequest.getInputChanges().orElse(null);
                     TransformExecutionResult result = transform.transform(inputArtifactProvider, getOutputDir(workspace), dependencies, inputChanges);
@@ -257,7 +267,7 @@ abstract class AbstractTransformExecution implements UnitOfWork {
 
     @Override
     public void markLegacySnapshottingInputsStarted() {
-        this.operationContext = buildOperationExecutor.start(BuildOperationDescriptor
+        this.operationContext = buildOperationRunner.start(BuildOperationDescriptor
             .displayName("Snapshot transform inputs")
             .name("Snapshot transform inputs")
             .details(SNAPSHOT_TRANSFORM_INPUTS_DETAILS));
@@ -293,8 +303,16 @@ abstract class AbstractTransformExecution implements UnitOfWork {
     @Override
     public Optional<CachingDisabledReason> shouldDisableCaching(@Nullable OverlappingOutputs detectedOverlappingOutputs) {
         return transform.isCacheable()
-            ? Optional.empty()
+            ? maybeDisableCachingByProperty()
             : Optional.of(NOT_CACHEABLE);
+    }
+
+    private Optional<CachingDisabledReason> maybeDisableCachingByProperty() {
+        if (disableCachingByProperty) {
+            return Optional.of(CACHING_DISABLED_REASON);
+        }
+
+        return Optional.empty();
     }
 
     @Override
@@ -353,9 +371,7 @@ abstract class AbstractTransformExecution implements UnitOfWork {
 
         @Override
         public byte[] getSecondaryInputValueHashBytes() {
-            Hasher hasher = Hashing.newHasher();
-            transformWorkspaceIdentity.getSecondaryInputsSnapshot().appendToHasher(hasher);
-            return hasher.hash().toByteArray();
+            return Hashing.hashHashable(transformWorkspaceIdentity.getSecondaryInputsSnapshot()).toByteArray();
         }
     }
 }

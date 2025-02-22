@@ -16,84 +16,60 @@
 
 package org.gradle.api.problems.internal;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Objects;
 import org.gradle.api.NonNullApi;
-import org.gradle.api.problems.DocLink;
-import org.gradle.api.problems.ProblemCategory;
+import org.gradle.api.problems.AdditionalData;
+import org.gradle.api.problems.ProblemDefinition;
 import org.gradle.api.problems.ProblemLocation;
-import org.gradle.api.problems.Severity;
-import org.gradle.internal.operations.OperationIdentifier;
+import org.gradle.internal.reflect.Instantiator;
+import org.gradle.tooling.internal.provider.serialization.PayloadSerializer;
 
 import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
+
+import static com.google.common.base.Objects.equal;
 
 @NonNullApi
-public class DefaultProblem implements InternalProblem, Serializable {
-    private final String label;
-    private Severity severity;
-    private final List<ProblemLocation> locations;
-    private final DocLink documentationLink;
-    private final String description;
+public class DefaultProblem implements Serializable, InternalProblem {
+    private final ProblemDefinition problemDefinition;
+    private final String contextualLabel;
     private final List<String> solutions;
-    private final RuntimeException cause;
-    private final ProblemCategory problemCategory;
-    private final Map<String, Object> additionalData;
+    private final List<ProblemLocation> originLocations;
+    private final List<ProblemLocation> contextualLocations;
+    private final String details;
+    private final Throwable exception;
+    private final AdditionalData additionalData;
 
-    @Nullable
-    private OperationIdentifier buildOperationId;
-
-    protected DefaultProblem(
-        String label,
-        Severity severity,
-        List<ProblemLocation> locations,
-        @Nullable DocLink documentationUrl,
-        @Nullable String description,
-        @Nullable List<String> solutions,
-        @Nullable RuntimeException cause,
-        ProblemCategory problemCategory,
-        Map<String, Object> additionalData,
-        @Nullable OperationIdentifier buildOperationId
+    public DefaultProblem(
+        ProblemDefinition problemDefinition,
+        @Nullable String contextualLabel,
+        List<String> solutions,
+        List<ProblemLocation> originLocations,
+        List<ProblemLocation> contextualLocations,
+        @Nullable String details,
+        @Nullable Throwable exception,
+        @Nullable AdditionalData additionalData
     ) {
-        this.label = label;
-        this.severity = severity;
-        this.locations = ImmutableList.copyOf(locations);
-        this.documentationLink = documentationUrl;
-        this.description = description;
-        this.solutions = solutions == null ? ImmutableList.<String>of() : ImmutableList.copyOf(solutions);
-        this.cause = cause;
-        this.problemCategory = problemCategory;
-        this.additionalData = ImmutableMap.copyOf(additionalData);
-        this.buildOperationId = buildOperationId;
+        this.problemDefinition = problemDefinition;
+        this.contextualLabel = contextualLabel;
+        this.solutions = solutions;
+        this.originLocations = originLocations;
+        this.contextualLocations = contextualLocations;
+        this.details = details;
+        this.exception = exception;
+        this.additionalData = additionalData;
     }
 
     @Override
-    public String getLabel() {
-        return label;
-    }
-
-    @Override
-    public Severity getSeverity() {
-        return severity;
-    }
-
-    @Override
-    public List<ProblemLocation> getLocations() {
-        return locations;
+    public ProblemDefinition getDefinition() {
+        return problemDefinition;
     }
 
     @Nullable
     @Override
-    public DocLink getDocumentationLink() {
-        return documentationLink;
-    }
-
-    @Override
-    public String getDetails() {
-        return description;
+    public String getContextualLabel() {
+        return contextualLabel;
     }
 
     @Override
@@ -101,37 +77,37 @@ public class DefaultProblem implements InternalProblem, Serializable {
         return solutions;
     }
 
+    @Nullable
     @Override
-    public RuntimeException getException() {
-        return cause;
+    public String getDetails() {
+        return details;
     }
 
     @Override
-    public ProblemCategory getProblemCategory() {
-        return problemCategory;
+    public List<ProblemLocation> getOriginLocations() {
+        return originLocations;
     }
 
     @Override
-    public Map<String, Object> getAdditionalData() {
-        return additionalData;
+    public List<ProblemLocation> getContextualLocations() {
+        return contextualLocations;
     }
 
     @Nullable
-    public OperationIdentifier getBuildOperationId() {
-        return buildOperationId;
-    }
-
-    public void setSeverity(Severity severity) {
-        this.severity = severity;
+    @Override
+    public Throwable getException() {
+        return exception;
     }
 
     @Override
-    public InternalProblemBuilder toBuilder() {
-        return new DefaultProblemBuilder(this);
+    @Nullable
+    public AdditionalData getAdditionalData() {
+        return additionalData;
     }
 
-    private static boolean equals(@Nullable Object a, @Nullable Object b) {
-        return (a == b) || (a != null && a.equals(b));
+    @Override
+    public InternalProblemBuilder toBuilder(AdditionalDataBuilderFactory additionalDataBuilderFactory, Instantiator instantiator, PayloadSerializer payloadSerializer) {
+        return new DefaultProblemBuilder(this, additionalDataBuilderFactory, instantiator, payloadSerializer);
     }
 
     @Override
@@ -143,21 +119,31 @@ public class DefaultProblem implements InternalProblem, Serializable {
             return false;
         }
         DefaultProblem that = (DefaultProblem) o;
-        return equals(label, that.label) &&
-            severity == that.severity &&
-            equals(locations, that.locations) &&
-            equals(problemCategory, that.problemCategory) &&
-            equals(documentationLink, that.documentationLink) &&
-            equals(description, that.description) &&
-            equals(solutions, that.solutions) &&
-            equals(cause, that.cause) &&
-            equals(additionalData, that.additionalData) &&
-            equals(buildOperationId, that.buildOperationId);
+        return equal(problemDefinition, that.problemDefinition) &&
+            equal(contextualLabel, that.contextualLabel) &&
+            equal(solutions, that.solutions) &&
+            equal(originLocations, that.originLocations) &&
+            equal(details, that.details) &&
+            equal(exception, that.exception) &&
+            equal(additionalData, that.additionalData);
     }
 
     @Override
     public int hashCode() {
-        return Arrays.hashCode(new Object[]{label, severity, locations, documentationLink, description, solutions, cause, additionalData, buildOperationId});
+        return Objects.hashCode(problemDefinition, contextualLabel, solutions, originLocations, details, exception, additionalData);
     }
 
+    @Override
+    public String toString() {
+        return "DefaultProblem{" +
+            "problemDefinition=" + problemDefinition +
+            ", contextualLabel='" + contextualLabel + '\'' +
+            ", solutions=" + solutions +
+            ", originLocations=" + originLocations +
+            ", contextualLocations=" + contextualLocations +
+            ", details='" + details + '\'' +
+            ", exception=" + (exception != null ? exception.toString() : "null") +
+            ", additionalData=" + additionalData +
+            '}';
+    }
 }

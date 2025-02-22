@@ -19,7 +19,6 @@ package org.gradle.plugins.ide.eclipse.model.internal;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -53,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -83,9 +83,9 @@ public class EclipseDependenciesCreator {
 
     private class EclipseDependenciesVisitor implements IdeDependencyVisitor {
 
-        private final List<AbstractClasspathEntry> projects = Lists.newArrayList();
-        private final List<AbstractClasspathEntry> modules = Lists.newArrayList();
-        private final List<AbstractClasspathEntry> files = Lists.newArrayList();
+        private final List<AbstractClasspathEntry> projects = new ArrayList<>();
+        private final List<AbstractClasspathEntry> modules = new ArrayList<>();
+        private final List<AbstractClasspathEntry> files = new ArrayList<>();
         private final Multimap<String, String> pathToSourceSets = collectLibraryToSourceSetMapping();
         private final UnresolvedIdeDependencyHandler unresolvedIdeDependencyHandler = new UnresolvedIdeDependencyHandler();
         private final Project project;
@@ -168,7 +168,7 @@ public class EclipseDependenciesCreator {
          * that, so defer that until later.
          */
         public List<AbstractClasspathEntry> getDependencies() {
-            List<AbstractClasspathEntry> dependencies = Lists.newArrayListWithCapacity(projects.size() + modules.size() + files.size());
+            List<AbstractClasspathEntry> dependencies = new ArrayList<>(projects.size() + modules.size() + files.size());
             dependencies.addAll(projects);
             dependencies.addAll(modules);
             dependencies.addAll(files);

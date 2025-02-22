@@ -48,6 +48,7 @@ import org.gradle.api.plugins.ExtensionContainer
 import org.gradle.api.plugins.ObjectConfigurationAction
 import org.gradle.api.plugins.PluginContainer
 import org.gradle.api.plugins.PluginManager
+import org.gradle.api.project.IsolatedProject
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.resources.ResourceHandler
@@ -159,6 +160,9 @@ abstract class ProjectDelegate : Project {
     override fun getProject(): Project =
         delegate.project
 
+    override fun getIsolated(): IsolatedProject =
+        delegate.isolated
+
     override fun dependencies(configureClosure: Closure<*>) =
         delegate.dependencies(configureClosure)
 
@@ -201,10 +205,14 @@ abstract class ProjectDelegate : Project {
     override fun <T : Any?> configure(objects: Iterable<T>, configureAction: Action<in T>): Iterable<T> =
         delegate.configure(objects, configureAction)
 
+    @Deprecated("Deprecated in Java")
     override fun exec(closure: Closure<*>): ExecResult =
+        @Suppress("DEPRECATION")
         delegate.exec(closure)
 
+    @Deprecated("Deprecated in Java")
     override fun exec(action: Action<in ExecSpec>): ExecResult =
+        @Suppress("DEPRECATION")
         delegate.exec(action)
 
     override fun sync(action: Action<in SyncSpec>): WorkResult =
@@ -306,19 +314,29 @@ abstract class ProjectDelegate : Project {
     override fun project(path: String, configureAction: Action<in Project>): Project =
         delegate.project(path, configureAction)
 
+    @Deprecated("Use tasks.register instead", ReplaceWith("tasks.register(name)"))
     override fun task(name: String): Task =
+        @Suppress("DEPRECATION")
         delegate.task(name)
 
+    @Deprecated("Use tasks.register instead")
     override fun task(args: Map<String, *>, name: String): Task =
+        @Suppress("DEPRECATION")
         delegate.task(args, name)
 
+    @Deprecated("Use tasks.register instead")
     override fun task(args: Map<String, *>, name: String, configureClosure: Closure<*>): Task =
+        @Suppress("DEPRECATION")
         delegate.task(args, name, configureClosure)
 
+    @Deprecated("Use tasks.register instead", ReplaceWith("tasks.register(name, configureClosure)"))
     override fun task(name: String, configureClosure: Closure<*>): Task =
+        @Suppress("DEPRECATION")
         delegate.task(name, configureClosure)
 
+    @Deprecated("Use tasks.register instead", ReplaceWith("tasks.register(name, configureAction)"))
     override fun task(name: String, configureAction: Action<in Task>): Task =
+        @Suppress("DEPRECATION")
         delegate.task(name, configureAction)
 
     override fun copy(closure: Closure<*>): WorkResult =
@@ -374,10 +392,14 @@ abstract class ProjectDelegate : Project {
     override fun evaluationDependsOn(path: String): Project =
         delegate.evaluationDependsOn(path)
 
+    @Deprecated("Deprecated in Java")
     override fun javaexec(closure: Closure<*>): ExecResult =
+        @Suppress("DEPRECATION")
         delegate.javaexec(closure)
 
+    @Deprecated("Deprecated in Java")
     override fun javaexec(action: Action<in JavaExecSpec>): ExecResult =
+        @Suppress("DEPRECATION")
         delegate.javaexec(action)
 
     @AllowUsingApiForExternalUse

@@ -205,6 +205,7 @@ class NamedDomainObjectContainerExtensionsTest {
             }
             val b = "bob"(type = DomainObjectBase.Bar::class)
             val j = "jim" {}
+            @Suppress("deprecation")
             val s = "steve"() // can invoke without a block, but must invoke
 
             assertThat(a.get(), sameInstance(alice))
@@ -224,6 +225,7 @@ class NamedDomainObjectContainerExtensionsTest {
         )
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun `can create and configure tasks`() {
 
@@ -259,6 +261,7 @@ class NamedDomainObjectContainerExtensionsTest {
         }
     }
 
+    @Suppress("DEPRECATION")
     @Test
     fun `can create element within configuration block via delegated property`() {
 
@@ -267,7 +270,7 @@ class NamedDomainObjectContainerExtensionsTest {
         }
 
         tasks {
-            @Suppress("unused_variable")
+            @Suppress("UnusedPrivateProperty")
             val hello by creating
         }
         verify(tasks).create("hello")
@@ -281,7 +284,7 @@ class NamedDomainObjectContainerExtensionsTest {
             on { getByName("hello") } doReturn task
         }
 
-        @Suppress("unused_variable")
+        @Suppress("UnusedPrivateProperty")
         tasks {
             val hello by getting(Exec::class)
         }

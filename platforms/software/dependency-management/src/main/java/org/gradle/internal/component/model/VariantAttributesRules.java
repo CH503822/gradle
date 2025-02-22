@@ -15,14 +15,14 @@
  */
 package org.gradle.internal.component.model;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.attributes.AttributeContainer;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
+import org.gradle.api.internal.attributes.AttributesFactory;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
 import org.gradle.internal.component.external.model.VariantMetadataRules;
 
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -32,10 +32,10 @@ import java.util.List;
  * in the {@link #execute(VariantResolveMetadata, AttributeContainerInternal)} method when the attributes of a variant are needed during dependency resolution.
  */
 public class VariantAttributesRules {
-    private final ImmutableAttributesFactory attributesFactory;
-    private final List<VariantMetadataRules.VariantAction<? super AttributeContainer>> actions = Lists.newLinkedList();
+    private final AttributesFactory attributesFactory;
+    private final List<VariantMetadataRules.VariantAction<? super AttributeContainer>> actions = new LinkedList<>();
 
-    public VariantAttributesRules(ImmutableAttributesFactory attributesFactory) {
+    public VariantAttributesRules(AttributesFactory attributesFactory) {
         this.attributesFactory = attributesFactory;
     }
 

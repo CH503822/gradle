@@ -21,26 +21,31 @@ plugins {
 description = """Provides the version catalog plugin."""
 
 dependencies {
-    implementation(project(":base-services"))
-    implementation(project(":core-api"))
-    implementation(project(":core"))
-    implementation(project(":dependency-management"))
-    implementation(project(":logging"))
-    implementation(project(":model-core"))
-    implementation(project(":platform-base"))
-    implementation(project(":platform-jvm"))
+    api(projects.baseServices)
+    api(projects.core)
+    api(projects.coreApi)
+    api(projects.dependencyManagement)
 
-    implementation(libs.groovy)
-    implementation(libs.guava)
-    implementation(libs.inject)
+    api(libs.guava)
+    api(libs.inject)
 
-    integTestImplementation(testFixtures(project(":core")))
-    integTestImplementation(testFixtures(project(":jvm-services")))
-    integTestImplementation(testFixtures(project(":resources-http")))
+    implementation(projects.stdlibJavaExtensions)
+    implementation(projects.loggingApi)
+    implementation(projects.platformBase)
+    implementation(projects.platformJvm)
 
-    integTestDistributionRuntimeOnly(project(":distributions-jvm"))
+    runtimeOnly(libs.groovy)
+
+    integTestImplementation(testFixtures(projects.core))
+    integTestImplementation(testFixtures(projects.jvmServices))
+    integTestImplementation(testFixtures(projects.resourcesHttp))
+
+    integTestDistributionRuntimeOnly(projects.distributionsJvm)
 }
 
 packageCycles {
     excludePatterns.add("org/gradle/**")
+}
+tasks.isolatedProjectsIntegTest {
+    enabled = false
 }

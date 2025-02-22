@@ -17,15 +17,18 @@
 package org.gradle.nativeplatform.toolchain.internal.msvcpp.version;
 
 
-import com.google.common.collect.Lists;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.internal.os.OperatingSystem;
+import org.gradle.internal.service.scopes.Scope;
+import org.gradle.internal.service.scopes.ServiceScope;
 
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
+@ServiceScope(Scope.BuildSession.class)
 public class SystemPathVersionLocator implements VisualStudioVersionLocator {
     private static final String LEGACY_COMPILER_FILENAME = "cl.exe";
 
@@ -41,7 +44,7 @@ public class SystemPathVersionLocator implements VisualStudioVersionLocator {
     @Nonnull
     @Override
     public List<VisualStudioInstallCandidate> getVisualStudioInstalls() {
-        List<VisualStudioInstallCandidate> installs = Lists.newArrayList();
+        List<VisualStudioInstallCandidate> installs = new ArrayList<>();
 
         File compilerInPath = os.findInPath(LEGACY_COMPILER_FILENAME);
         if (compilerInPath == null) {

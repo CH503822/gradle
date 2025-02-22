@@ -18,17 +18,14 @@ package org.gradle.api.internal.artifacts.repositories.resolver
 
 import org.gradle.api.Action
 import org.gradle.api.attributes.Attribute
-import org.gradle.api.internal.DocumentationRegistry
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.GradlePomModuleDescriptorBuilder
-import org.gradle.api.internal.attributes.DefaultAttributesSchema
-import org.gradle.api.internal.attributes.ImmutableAttributes
+import org.gradle.api.internal.attributes.immutable.ImmutableAttributesSchema
 import org.gradle.api.internal.notations.ComponentIdentifierParserFactory
 import org.gradle.api.internal.notations.DependencyMetadataNotationParser
-import org.gradle.internal.component.ResolutionFailureHandler
 import org.gradle.internal.component.external.descriptor.Configuration
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.MutableModuleComponentResolveMetadata
@@ -36,7 +33,6 @@ import org.gradle.internal.component.external.model.maven.MutableMavenModuleReso
 import org.gradle.internal.component.model.GraphVariantSelector
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata
 import org.gradle.util.AttributeTestUtil
-import org.gradle.util.SnapshotTestUtil
 import org.gradle.util.TestUtil
 import org.gradle.util.internal.SimpleMapInterner
 import spock.lang.Specification
@@ -53,7 +49,6 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
     def componentIdentifier = DefaultModuleComponentIdentifier.newId(versionIdentifier)
     def testAttribute = Attribute.of("someAttribute", String)
     def attributes = AttributeTestUtil.attributesFactory().of(testAttribute, "someValue")
-    def schema = new DefaultAttributesSchema(TestUtil.instantiatorFactory(), SnapshotTestUtil.isolatableFactory())
     def ivyMetadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
     def mavenMetadataFactory = DependencyManagementTestUtil.mavenMetadataFactory()
 
@@ -65,20 +60,18 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
     private ivyComponentMetadata() {
         ivyMetadataFactory.create(componentIdentifier, [], [new Configuration("configurationDefinedInIvyMetadata", true, true, [])], [], [])
     }
+
     private gradleComponentMetadata() {
         def metadata = mavenMetadataFactory.create(componentIdentifier, [])
         metadata.addVariant("variantDefinedInGradleMetadata1", attributes) //gradle metadata is distinguished from maven POM metadata by explicitly defining variants
-        metadata.addVariant("variantDefinedInGradleMetadata2", AttributeTestUtil.attributesFactory().of(testAttribute, "other")) //gradle metadata is distinguished from maven POM metadata by explicitly defining variants
+        metadata.addVariant("variantDefinedInGradleMetadata2", AttributeTestUtil.attributesFactory().of(testAttribute, "other"))
+        //gradle metadata is distinguished from maven POM metadata by explicitly defining variants
         gradleMetadata = metadata
         metadata
     }
 
     private MutableMavenModuleResolveMetadata mavenComponentMetadata() {
         mavenMetadataFactory.create(componentIdentifier, [])
-    }
-
-    def setup() {
-        schema.attribute(testAttribute)
     }
 
     def "sees variants defined in Gradle metadata"() {
@@ -158,11 +151,11 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
         def componentIdentifier = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("org.test", "consumer"), "1.0")
         def consumerIdentifier = DefaultModuleVersionIdentifier.newId(componentIdentifier)
         def componentSelector = newSelector(DefaultModuleIdentifier.newId(consumerIdentifier.group, consumerIdentifier.name), new DefaultMutableVersionConstraint(consumerIdentifier.version))
-        def consumer = new LocalComponentDependencyMetadata(componentSelector, ImmutableAttributes.EMPTY, null, [] as List, [], false, false, true, false, false, null)
+        def consumer = new LocalComponentDependencyMetadata(componentSelector, null, [] as List, [], false, false, true, false, false, null)
         def state = DependencyManagementTestUtil.modelGraphResolveFactory().stateFor(immutable)
-        def variantSelector = new GraphVariantSelector(new ResolutionFailureHandler(new DocumentationRegistry()))
+        def variantSelector = new GraphVariantSelector(AttributeTestUtil.services(), DependencyManagementTestUtil.newFailureHandler())
 
-        def variant = consumer.selectVariants(variantSelector, attributes, state, schema, [] as Set).variants[0]
-        variant.metadata.dependencies
+        def variant = consumer.selectVariants(variantSelector, attributes, state, ImmutableAttributesSchema.EMPTY, [] as Set).variants[0]
+        variant.dependencies
     }
 }

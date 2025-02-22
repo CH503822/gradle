@@ -32,10 +32,10 @@ class IvySftpRepoErrorsIntegrationTest extends AbstractSftpDependencyResolutionT
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'sftp'
-                        password 'sftp'
+                        username = 'sftp'
+                        password = 'sftp'
                     }
                 }
             }
@@ -74,10 +74,10 @@ Required by:
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'sftp'
-                        password 'sftp'
+                        username = 'sftp'
+                        password = 'sftp'
                     }
                 }
             }
@@ -108,10 +108,10 @@ Required by:
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'bad'
-                        password 'credentials'
+                        username = 'bad'
+                        password = 'credentials'
                     }
                 }
             }
@@ -130,7 +130,8 @@ Required by:
         assertTaskFailureDescription(":retrieve")
         failure.assertHasCause("Could not resolve all files for configuration ':compile'.")
             .assertHasCause('Could not resolve org.group.name:projectA:1.2')
-            .assertHasCause("Password authentication not supported or invalid credentials for SFTP server at ${ivySftpRepo.serverUri}")
+            .assertHasCause("Could not connect to SFTP server at ${ivySftpRepo.serverUri}")
+            .assertHasCause("Auth fail for methods 'password,keyboard-interactive,publickey'")
     }
 
     void "resolve dependencies from a SFTP Ivy repository with unsupported password authentication"() {
@@ -140,10 +141,10 @@ Required by:
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'sftp'
-                        password 'sftp'
+                        username = 'sftp'
+                        password = 'sftp'
                     }
                 }
             }
@@ -162,7 +163,8 @@ Required by:
         assertTaskFailureDescription(":retrieve")
         failure.assertHasCause("Could not resolve all files for configuration ':compile'.")
             .assertHasCause('Could not resolve org.group.name:projectA:1.2')
-            .assertHasCause("Password authentication not supported or invalid credentials for SFTP server at ${ivySftpRepo.serverUri}")
+            .assertHasCause("Could not connect to SFTP server at ${ivySftpRepo.serverUri}")
+            .assertHasCause("Auth fail for methods 'keyboard-interactive,publickey'")
     }
 
     void "resolve dependencies from an unreachable SFTP Ivy repository"() {
@@ -170,10 +172,10 @@ Required by:
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'sftp'
-                        password 'sftp'
+                        username = 'sftp'
+                        password = 'sftp'
                     }
                 }
             }
@@ -203,10 +205,10 @@ Required by:
         buildFile << """
             repositories {
                 ivy {
-                    url "${ivySftpRepo.uri}"
+                    url = "${ivySftpRepo.uri}"
                     credentials {
-                        username 'sftp'
-                        password 'sftp'
+                        username = 'sftp'
+                        password = 'sftp'
                     }
                 }
             }
@@ -242,7 +244,7 @@ Required by:
         buildFile << """
 repositories {
     ivy {
-        url "${getIvySftpRepo().uri}"
+        url = "${getIvySftpRepo().uri}"
         authentication {
             auth(BasicAuthentication)
         }

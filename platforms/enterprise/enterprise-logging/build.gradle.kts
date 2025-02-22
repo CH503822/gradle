@@ -7,9 +7,9 @@ description = "Logging API consumed by the Develocity plugin"
 gradlebuildJava.usedInWorkers()
 
 dependencies {
-    api(project(":logging-api"))
+    api(projects.buildOperations)
+    api(projects.loggingApi)
+    api(projects.stdlibJavaExtensions)
 
-    implementation(project(":build-operations"))
-    implementation(project(":base-annotations"))
-    implementation(libs.jsr305)
+    api(libs.jsr305)
 }

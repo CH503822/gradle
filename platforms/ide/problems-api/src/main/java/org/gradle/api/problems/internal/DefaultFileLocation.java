@@ -16,27 +16,16 @@
 
 package org.gradle.api.problems.internal;
 
+import com.google.common.base.Objects;
 import org.gradle.api.problems.FileLocation;
 
-import javax.annotation.Nullable;
+import java.io.Serializable;
 
-public class DefaultFileLocation implements FileLocation {
-
+public class DefaultFileLocation implements FileLocation, Serializable {
     private final String path;
-    private final Integer line;
-    private final Integer column;
-    private final Integer length;
 
-    public DefaultFileLocation(String path, @Nullable Integer line, @Nullable Integer column, @Nullable Integer length) {
+    protected DefaultFileLocation(String path) {
         this.path = path;
-        this.line = line;
-        this.column = column;
-        this.length = length;
-    }
-
-    @Override
-    public String getType() {
-        return "file";
     }
 
     @Override
@@ -44,18 +33,21 @@ public class DefaultFileLocation implements FileLocation {
         return path;
     }
 
-    @Override
-    public Integer getLine() {
-        return line;
+    public static FileLocation from(String path) {
+        return new DefaultFileLocation(path);
     }
 
     @Override
-    public Integer getColumn() {
-        return column;
+    public boolean equals(Object o) {
+        if (!(o instanceof DefaultFileLocation)) {
+            return false;
+        }
+        DefaultFileLocation that = (DefaultFileLocation) o;
+        return Objects.equal(path, that.path);
     }
 
     @Override
-    public Integer getLength() {
-        return length;
+    public int hashCode() {
+        return Objects.hashCode(path);
     }
 }

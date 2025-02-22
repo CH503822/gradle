@@ -16,6 +16,8 @@
 
 package org.gradle.api.internal.provider;
 
+import org.gradle.internal.evaluation.EvaluationScopeContext;
+
 import javax.annotation.Nullable;
 
 class OrElseProvider<T> extends AbstractMinimalProvider<T> {
@@ -28,7 +30,7 @@ class OrElseProvider<T> extends AbstractMinimalProvider<T> {
     }
 
     @Override
-    public String toString() {
+    protected String toStringNoReentrance() {
         return String.format("or(%s, %s)", left, right);
     }
 
@@ -40,47 +42,55 @@ class OrElseProvider<T> extends AbstractMinimalProvider<T> {
 
     @Override
     public ValueProducer getProducer() {
-        return new OrElseValueProducer(left, right, right.getProducer());
+        try (EvaluationScopeContext context = openScope()) {
+            return new OrElseValueProducer(context, left, right);
+        }
     }
 
     @Override
     public boolean calculatePresence(ValueConsumer consumer) {
-        return left.calculatePresence(consumer) || right.calculatePresence(consumer);
+        try (EvaluationScopeContext ignored = openScope()) {
+            return left.calculatePresence(consumer) || right.calculatePresence(consumer);
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Override
     public ExecutionTimeValue<? extends T> calculateExecutionTimeValue() {
-        ExecutionTimeValue<? extends T> leftValue = left.calculateExecutionTimeValue();
-        if (leftValue.hasFixedValue()) {
-            return leftValue;
+        try (EvaluationScopeContext ignored = openScope()) {
+            ExecutionTimeValue<? extends T> leftValue = left.calculateExecutionTimeValue();
+            if (leftValue.hasFixedValue()) {
+                return leftValue;
+            }
+            ExecutionTimeValue<? extends T> rightValue = right.calculateExecutionTimeValue();
+            if (leftValue.isMissing()) {
+                return rightValue;
+            }
+            if (rightValue.isMissing()) {
+                // simplify
+                return leftValue;
+            }
+            return ExecutionTimeValue.changingValue(
+                new OrElseProvider(
+                    leftValue.getChangingValue(),
+                    rightValue.toProvider()
+                )
+            );
         }
-        ExecutionTimeValue<? extends T> rightValue = right.calculateExecutionTimeValue();
-        if (leftValue.isMissing()) {
-            return rightValue;
-        }
-        if (rightValue.isMissing()) {
-            // simplify
-            return leftValue;
-        }
-        return ExecutionTimeValue.changingValue(
-            new OrElseProvider(
-                leftValue.getChangingValue(),
-                rightValue.toProvider()
-            )
-        );
     }
 
     @Override
     protected Value<? extends T> calculateOwnValue(ValueConsumer consumer) {
-        Value<? extends T> leftValue = left.calculateValue(consumer);
-        if (!leftValue.isMissing()) {
-            return leftValue;
+        try (EvaluationScopeContext ignored = openScope()) {
+            Value<? extends T> leftValue = left.calculateValue(consumer);
+            if (!leftValue.isMissing()) {
+                return leftValue;
+            }
+            Value<? extends T> rightValue = right.calculateValue(consumer);
+            if (!rightValue.isMissing()) {
+                return rightValue;
+            }
+            return leftValue.addPathsFrom(rightValue);
         }
-        Value<? extends T> rightValue = right.calculateValue(consumer);
-        if (!rightValue.isMissing()) {
-            return rightValue;
-        }
-        return leftValue.addPathsFrom(rightValue);
     }
 }

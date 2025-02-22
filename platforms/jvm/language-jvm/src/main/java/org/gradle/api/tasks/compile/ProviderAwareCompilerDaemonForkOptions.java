@@ -17,14 +17,15 @@
 package org.gradle.api.tasks.compile;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import org.gradle.api.Incubating;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
+import org.gradle.internal.instrumentation.api.annotations.ToBeReplacedByLazyProperty;
 import org.gradle.process.CommandLineArgumentProvider;
 import org.gradle.util.internal.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,7 +38,7 @@ import java.util.List;
 @Incubating
 public class ProviderAwareCompilerDaemonForkOptions extends BaseForkOptions {
 
-    private final List<CommandLineArgumentProvider> jvmArgumentProviders = Lists.newArrayList();
+    private final List<CommandLineArgumentProvider> jvmArgumentProviders = new ArrayList<>();
 
     /**
      * Returns any additional JVM argument providers for the compiler process.
@@ -45,6 +46,7 @@ public class ProviderAwareCompilerDaemonForkOptions extends BaseForkOptions {
      */
     @Optional
     @Nested
+    @ToBeReplacedByLazyProperty
     public List<CommandLineArgumentProvider> getJvmArgumentProviders() {
         return jvmArgumentProviders;
     }
@@ -56,6 +58,7 @@ public class ProviderAwareCompilerDaemonForkOptions extends BaseForkOptions {
      * @return The immutable list of arguments. Returns an empty list if there are no arguments.
      */
     @Internal
+    @ToBeReplacedByLazyProperty
     public List<String> getAllJvmArgs() {
         ImmutableList.Builder<String> builder = ImmutableList.builder();
         builder.addAll(CollectionUtils.stringize(getJvmArgs()));

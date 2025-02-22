@@ -16,11 +16,10 @@
 
 package org.gradle.internal.watch.registry.impl
 
-
-import net.rubygrapefruit.platform.file.FileWatcher
 import org.gradle.api.internal.cache.StringInterner
 import org.gradle.api.internal.file.TestFiles
 import org.gradle.api.internal.file.TestVirtualFileSystem
+import org.gradle.fileevents.FileWatcher
 import org.gradle.internal.file.FileMetadata.AccessType
 import org.gradle.internal.file.impl.DefaultFileMetadata
 import org.gradle.internal.snapshot.CaseSensitivity
@@ -264,7 +263,7 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         0 * _
 
         when:
-        buildFinished(Integer.MAX_VALUE, WatchMode.DEFAULT, [unsupportedFileSystemMountPoint])
+        buildFinished(Integer.MAX_VALUE, [unsupportedFileSystemMountPoint])
         then:
         !vfsHasSnapshotsAt(unwatchableContent)
         0 * _
@@ -285,7 +284,7 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         0 * _
 
         when:
-        buildFinished(Integer.MAX_VALUE, WatchMode.ENABLED)
+        buildFinished(Integer.MAX_VALUE)
         then:
         vfsHasSnapshotsAt(unwatchableContent)
         0 * _
@@ -306,7 +305,7 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         0 * _
 
         when:
-        buildFinished(Integer.MAX_VALUE, WatchMode.ENABLED)
+        buildFinished(Integer.MAX_VALUE)
         then:
         vfsHasSnapshotsAt(unwatchableContent)
         0 * _
@@ -322,7 +321,7 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         0 * _
 
         when:
-        buildFinished(Integer.MAX_VALUE, WatchMode.DEFAULT, [unsupportedFileSystemMountPoint])
+        buildFinished(Integer.MAX_VALUE, [unsupportedFileSystemMountPoint])
         then:
         !vfsHasSnapshotsAt(unwatchableContent)
         0 * _
@@ -341,7 +340,7 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         0 * _
 
         when:
-        buildFinished(Integer.MAX_VALUE, WatchMode.DEFAULT, [unsupportedFileSystemMountPoint])
+        buildFinished(Integer.MAX_VALUE, [unsupportedFileSystemMountPoint])
         then:
         !vfsHasSnapshotsAt(unwatchableContent)
 
@@ -503,13 +502,13 @@ abstract class AbstractFileWatcherUpdaterTest extends Specification {
         probeLocationResolver.apply(watchableHierarchy)
     }
 
-    SnapshotHierarchy buildStarted(watchMode = WatchMode.DEFAULT, unsupportedFileSystems = []) {
+    SnapshotHierarchy buildStarted(WatchMode watchMode = WatchMode.DEFAULT, List<File> unsupportedFileSystems = []) {
         virtualFileSystem.root = updater.updateVfsOnBuildStarted(virtualFileSystem.root, watchMode, unsupportedFileSystems)
         return virtualFileSystem.root
     }
 
-    void buildFinished(int maximumNumberOfWatchedHierarchies = Integer.MAX_VALUE, watchMode = WatchMode.DEFAULT, unsupportedFileSystems = []) {
-        virtualFileSystem.root = updater.updateVfsOnBuildFinished(virtualFileSystem.root, watchMode, maximumNumberOfWatchedHierarchies, unsupportedFileSystems)
+    void buildFinished(int maximumNumberOfWatchedHierarchies = Integer.MAX_VALUE, List<File> unsupportedFileSystems = []) {
+        virtualFileSystem.root = updater.updateVfsBeforeBuildFinished(virtualFileSystem.root, maximumNumberOfWatchedHierarchies, unsupportedFileSystems)
     }
 
     TestFile addSnapshotInWatchableHierarchy(TestFile projectRootDirectory) {

@@ -16,7 +16,6 @@
 
 package org.gradle.api.tasks.testing;
 
-import com.google.common.collect.Lists;
 import groovy.lang.Closure;
 import groovy.lang.DelegatesTo;
 import org.gradle.StartParameter;
@@ -31,6 +30,7 @@ import org.gradle.api.file.FileTree;
 import org.gradle.api.file.FileTreeElement;
 import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.api.internal.classpath.ModuleRegistry;
+import org.gradle.api.internal.provider.PropertyFactory;
 import org.gradle.api.internal.tasks.testing.JvmTestExecutionSpec;
 import org.gradle.api.internal.tasks.testing.TestExecutableUtils;
 import org.gradle.api.internal.tasks.testing.TestExecuter;
@@ -72,6 +72,7 @@ import org.gradle.internal.Factory;
 import org.gradle.internal.actor.ActorFactory;
 import org.gradle.internal.concurrent.CompositeStoppable;
 import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.instrumentation.api.annotations.ToBeReplacedByLazyProperty;
 import org.gradle.internal.jvm.DefaultModularitySpec;
 import org.gradle.internal.jvm.JavaModuleDetector;
 import org.gradle.internal.jvm.UnsupportedJavaRuntimeException;
@@ -93,6 +94,7 @@ import org.gradle.util.internal.ConfigureUtil;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -110,7 +112,7 @@ import static org.gradle.util.internal.ConfigureUtil.configureUsing;
  *
  * <pre class='autoTested'>
  * plugins {
- *     id 'java' // adds 'test' task
+ *     id("java-library") // adds 'test' task
  * }
  *
  * test {
@@ -138,7 +140,7 @@ import static org.gradle.util.internal.ConfigureUtil.configureUsing;
  *   maxHeapSize = "512m"
  *
  *   // set JVM arguments for the test JVM(s)
- *   jvmArgs '-XX:MaxPermSize=256m'
+ *   jvmArgs('-XX:MaxPermSize=256m')
  *
  *   // listen to events in the test execution lifecycle
  *   beforeTest { descriptor -&gt;
@@ -204,26 +206,13 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
     }
 
     private Provider<JavaLauncher> createJavaLauncherConvention() {
-        final ObjectFactory objectFactory = getObjectFactory();
         final JavaToolchainService javaToolchainService = getJavaToolchainService();
-        Provider<JavaToolchainSpec> executableOverrideToolchainSpec = getProviderFactory().provider(new Callable<JavaToolchainSpec>() {
-            @Override
-            public JavaToolchainSpec call() {
-                return TestExecutableUtils.getExecutableToolchainSpec(Test.this, objectFactory);
-            }
-        });
+        PropertyFactory propertyFactory = getPropertyFactory();
+        Provider<JavaToolchainSpec> executableOverrideToolchainSpec = getProviderFactory().provider(() -> TestExecutableUtils.getExecutableToolchainSpec(Test.this, propertyFactory));
 
         return executableOverrideToolchainSpec
-            .flatMap(new Transformer<Provider<JavaLauncher>, JavaToolchainSpec>() {
-                @Override
-                public Provider<JavaLauncher> transform(JavaToolchainSpec spec) {
-                    return javaToolchainService.launcherFor(spec);
-                }
-            })
-            .orElse(javaToolchainService.launcherFor(new Action<JavaToolchainSpec>() {
-                @Override
-                public void execute(JavaToolchainSpec javaToolchainSpec) {}
-            }));
+            .flatMap((Transformer<Provider<JavaLauncher>, JavaToolchainSpec>) javaToolchainService::launcherFor)
+            .orElse(javaToolchainService.launcherFor(javaToolchainSpec -> {}));
     }
 
     /**
@@ -231,6 +220,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      */
     @Override
     @Internal
+    @ToBeReplacedByLazyProperty
     public File getWorkingDir() {
         return forkOptions.getWorkingDir();
     }
@@ -267,6 +257,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * @since 3.3
      */
     @Input
+    @ToBeReplacedByLazyProperty
     public JavaVersion getJavaVersion() {
         return JavaVersion.toVersion(getJavaLauncher().get().getMetadata().getLanguageVersion().asInt());
     }
@@ -276,6 +267,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      */
     @Override
     @Internal
+    @ToBeReplacedByLazyProperty
     public String getExecutable() {
         return forkOptions.getExecutable();
     }
@@ -309,6 +301,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public Map<String, Object> getSystemProperties() {
         return forkOptions.getSystemProperties();
     }
@@ -343,6 +336,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public FileCollection getBootstrapClasspath() {
         return forkOptions.getBootstrapClasspath();
     }
@@ -368,6 +362,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public String getMinHeapSize() {
         return forkOptions.getMinHeapSize();
     }
@@ -376,6 +371,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public String getDefaultCharacterEncoding() {
         return forkOptions.getDefaultCharacterEncoding();
     }
@@ -400,6 +396,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public String getMaxHeapSize() {
         return forkOptions.getMaxHeapSize();
     }
@@ -416,6 +413,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public List<String> getJvmArgs() {
         return forkOptions.getJvmArgs();
     }
@@ -424,6 +422,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public List<CommandLineArgumentProvider> getJvmArgumentProviders() {
         return forkOptions.getJvmArgumentProviders();
     }
@@ -466,6 +465,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public boolean getEnableAssertions() {
         return forkOptions.getEnableAssertions();
     }
@@ -482,6 +482,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public boolean getDebug() {
         return forkOptions.getDebug();
     }
@@ -527,6 +528,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * @return whether this task will fail on the first failed test
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public boolean getFailFast() {
         return super.getFailFast();
     }
@@ -555,6 +557,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@inheritDoc}
      */
     @Override
+    @ToBeReplacedByLazyProperty
     public List<String> getAllJvmArgs() {
         return forkOptions.getAllJvmArgs();
     }
@@ -580,6 +583,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      */
     @Override
     @Internal
+    @ToBeReplacedByLazyProperty
     public Map<String, Object> getEnvironment() {
         return forkOptions.getEnvironment();
     }
@@ -655,6 +659,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
         validateExecutableMatchesToolchain();
         JavaForkOptions javaForkOptions = getForkOptionsFactory().newJavaForkOptions();
         copyTo(javaForkOptions);
+        javaForkOptions.systemProperty(TestWorker.WORKER_TMPDIR_SYS_PROPERTY, new File(getTemporaryDir(), "work"));
         JavaModuleDetector javaModuleDetector = getJavaModuleDetector();
         boolean testIsModule = javaModuleDetector.isModule(modularity.getInferModulePath().get(), getTestClassesDirs());
         FileCollection classpath = javaModuleDetector.inferClasspath(testIsModule, stableClasspath);
@@ -709,12 +714,11 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
         if (getDebug()) {
             getLogger().info("Running tests for remote debugging.");
         }
-        forkOptions.systemProperty(TestWorker.WORKER_TMPDIR_SYS_PROPERTY, new File(getTemporaryDir(), "work"));
 
         try {
             super.executeTests();
         } finally {
-            CompositeStoppable.stoppable(getTestFramework());
+            CompositeStoppable.stoppable(getTestFramework()).stop();
         }
     }
 
@@ -734,7 +738,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
 
     @Override
     protected List<String> getNoMatchingTestErrorReasons() {
-        List<String> reasons = Lists.newArrayList();
+        List<String> reasons = new ArrayList<>();
         if (!getIncludes().isEmpty()) {
             reasons.add(getIncludes() + "(include rules)");
         }
@@ -841,6 +845,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * @since 4.0
      */
     @Internal
+    @ToBeReplacedByLazyProperty
     public FileCollection getTestClassesDirs() {
         return testClassesDirs;
     }
@@ -882,6 +887,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      */
     @Override
     @Internal
+    @ToBeReplacedByLazyProperty
     public Set<String> getIncludes() {
         return patternSet.getIncludes();
     }
@@ -905,6 +911,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      */
     @Override
     @Internal
+    @ToBeReplacedByLazyProperty
     public Set<String> getExcludes() {
         return patternSet.getExcludes();
     }
@@ -932,6 +939,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
     }
 
     @Internal
+    @ToBeReplacedByLazyProperty(comment = "This will be removed")
     public TestFramework getTestFramework() {
         // TODO: Deprecate and remove this method
         return testFramework.get();
@@ -980,7 +988,6 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
 
     /**
      * Specifies that JUnit4 should be used to discover and execute the tests.
-     * <p>
      *
      * @see #useJUnit(org.gradle.api.Action) Configure JUnit4 specific options.
      */
@@ -1047,7 +1054,6 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
 
     /**
      * Specifies that TestNG should be used to discover and execute the tests.
-     * <p>
      *
      * @see #useTestNG(org.gradle.api.Action) Configure TestNG specific options.
      */
@@ -1086,8 +1092,6 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * If we are setting a framework to its existing value, no-op so as not to overwrite existing options here.
      * We need to allow this especially for the default test task, so that existing builds that configure options and
      * then call useJunit() don't clear out their options.
-     *
-     * @param testFramework
      */
     void useTestFramework(TestFramework testFramework) {
         Class<?> currentFramework = this.testFramework.get().getClass();
@@ -1117,6 +1121,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * Returns the classpath to use to execute the tests.
      */
     @Internal("captured by stableClasspath")
+    @ToBeReplacedByLazyProperty
     public FileCollection getClasspath() {
         return classpath;
     }
@@ -1130,6 +1135,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * {@code false} the classes which match the include and exclude patterns are executed.
      */
     @Input
+    @ToBeReplacedByLazyProperty
     public boolean isScanForTestClasses() {
         return scanForTestClasses;
     }
@@ -1153,6 +1159,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * @return The maximum number of test classes to execute in a test process. Returns 0 when there is no maximum.
      */
     @Internal
+    @ToBeReplacedByLazyProperty
     public long getForkEvery() {
         return getDebug() ? 0 : forkEvery;
     }
@@ -1216,6 +1223,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
      * @return The maximum number of forked test processes.
      */
     @Internal
+    @ToBeReplacedByLazyProperty
     public int getMaxParallelForks() {
         return getDebug() ? 1 : maxParallelForks;
     }
@@ -1244,6 +1252,7 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
     @SkipWhenEmpty
     @IgnoreEmptyDirectories
     @PathSensitive(PathSensitivity.RELATIVE)
+    @ToBeReplacedByLazyProperty(comment = "Should this be kept as it is?")
     public FileTree getCandidateClassFiles() {
         return getTestClassesDirs().getAsFileTree().matching(patternSet);
     }
@@ -1309,6 +1318,11 @@ public abstract class Test extends AbstractTestTask implements JavaForkOptions, 
 
     @Inject
     protected ObjectFactory getObjectFactory() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected PropertyFactory getPropertyFactory() {
         throw new UnsupportedOperationException();
     }
 

@@ -20,26 +20,29 @@ import gradlebuild.basics.BuildParams.AUTO_DOWNLOAD_ANDROID_STUDIO
 import gradlebuild.basics.BuildParams.BUILD_BRANCH
 import gradlebuild.basics.BuildParams.BUILD_COMMIT_DISTRIBUTION
 import gradlebuild.basics.BuildParams.BUILD_COMMIT_ID
-import gradlebuild.basics.BuildParams.BUILD_CONFIGURATION_ID
 import gradlebuild.basics.BuildParams.BUILD_FINAL_RELEASE
 import gradlebuild.basics.BuildParams.BUILD_ID
 import gradlebuild.basics.BuildParams.BUILD_IGNORE_INCOMING_BUILD_RECEIPT
 import gradlebuild.basics.BuildParams.BUILD_MILESTONE_NUMBER
 import gradlebuild.basics.BuildParams.BUILD_PROMOTION_COMMIT_ID
 import gradlebuild.basics.BuildParams.BUILD_RC_NUMBER
-import gradlebuild.basics.BuildParams.BUILD_SERVER_URL
 import gradlebuild.basics.BuildParams.BUILD_TIMESTAMP
 import gradlebuild.basics.BuildParams.BUILD_VCS_NUMBER
 import gradlebuild.basics.BuildParams.BUILD_VERSION_QUALIFIER
 import gradlebuild.basics.BuildParams.BUNDLE_GROOVY_4
 import gradlebuild.basics.BuildParams.CI_ENVIRONMENT_VARIABLE
+import gradlebuild.basics.BuildParams.DEBUG_DAEMON
+import gradlebuild.basics.BuildParams.DEBUG_LAUNCHER
 import gradlebuild.basics.BuildParams.DEFAULT_PERFORMANCE_BASELINES
 import gradlebuild.basics.BuildParams.ENABLE_CONFIGURATION_CACHE_FOR_DOCS_TESTS
 import gradlebuild.basics.BuildParams.FLAKY_TEST
 import gradlebuild.basics.BuildParams.GRADLE_INSTALL_PATH
 import gradlebuild.basics.BuildParams.INCLUDE_PERFORMANCE_TEST_SCENARIOS
 import gradlebuild.basics.BuildParams.MAX_PARALLEL_FORKS
+import gradlebuild.basics.BuildParams.MAX_TEST_DISTRIBUTION_LOCAL_EXECUTORS
+import gradlebuild.basics.BuildParams.MAX_TEST_DISTRIBUTION_REMOTE_EXECUTORS
 import gradlebuild.basics.BuildParams.PERFORMANCE_BASELINES
+import gradlebuild.basics.BuildParams.PERFORMANCE_CHANNEL_ENV
 import gradlebuild.basics.BuildParams.PERFORMANCE_DB_PASSWORD
 import gradlebuild.basics.BuildParams.PERFORMANCE_DB_PASSWORD_ENV
 import gradlebuild.basics.BuildParams.PERFORMANCE_DB_URL
@@ -52,8 +55,10 @@ import gradlebuild.basics.BuildParams.RERUN_ALL_TESTS
 import gradlebuild.basics.BuildParams.RUN_ANDROID_STUDIO_IN_HEADLESS_MODE
 import gradlebuild.basics.BuildParams.RUN_BROKEN_CONFIGURATION_CACHE_DOCS_TESTS
 import gradlebuild.basics.BuildParams.STUDIO_HOME
+import gradlebuild.basics.BuildParams.TEST_DISTRIBUTION_DOGFOODING_TAG
 import gradlebuild.basics.BuildParams.TEST_DISTRIBUTION_ENABLED
 import gradlebuild.basics.BuildParams.TEST_DISTRIBUTION_PARTITION_SIZE
+import gradlebuild.basics.BuildParams.TEST_DISTRIBUTION_SERVER_URL
 import gradlebuild.basics.BuildParams.TEST_JAVA_VENDOR
 import gradlebuild.basics.BuildParams.TEST_JAVA_VERSION
 import gradlebuild.basics.BuildParams.TEST_SPLIT_EXCLUDE_TEST_CLASSES
@@ -63,7 +68,9 @@ import gradlebuild.basics.BuildParams.VENDOR_MAPPING
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
+import org.gradle.internal.os.OperatingSystem
 import org.gradle.jvm.toolchain.JvmVendorSpec
+import org.gradle.jvm.toolchain.internal.LocationListInstallationSupplier.JAVA_INSTALLATIONS_PATHS_PROPERTY
 import org.jetbrains.kotlin.util.capitalizeDecapitalize.toUpperCaseAsciiOnly
 
 
@@ -76,14 +83,12 @@ object BuildParams {
     const val BUILD_BRANCH = "BUILD_BRANCH"
     const val BUILD_COMMIT_ID = "BUILD_COMMIT_ID"
     const val BUILD_COMMIT_DISTRIBUTION = "buildCommitDistribution"
-    const val BUILD_CONFIGURATION_ID = "BUILD_TYPE_ID"
     const val BUILD_FINAL_RELEASE = "finalRelease"
     const val BUILD_ID = "BUILD_ID"
     const val BUILD_IGNORE_INCOMING_BUILD_RECEIPT = "ignoreIncomingBuildReceipt"
     const val BUILD_MILESTONE_NUMBER = "milestoneNumber"
     const val BUILD_PROMOTION_COMMIT_ID = "promotionCommitId"
     const val BUILD_RC_NUMBER = "rcNumber"
-    const val BUILD_SERVER_URL = "BUILD_SERVER_URL"
     const val BUILD_TIMESTAMP = "buildTimestamp"
     const val BUILD_VCS_NUMBER = "BUILD_VCS_NUMBER"
     const val BUILD_VERSION_QUALIFIER = "versionQualifier"
@@ -104,18 +109,23 @@ object BuildParams {
     const val FLAKY_TEST = "flakyTests"
     const val INCLUDE_PERFORMANCE_TEST_SCENARIOS = "includePerformanceTestScenarios"
     const val MAX_PARALLEL_FORKS = "maxParallelForks"
+    const val MAX_TEST_DISTRIBUTION_REMOTE_EXECUTORS = "maxTestDistributionRemoteExecutors"
+    const val MAX_TEST_DISTRIBUTION_LOCAL_EXECUTORS = "maxTestDistributionLocalExecutors"
     const val PERFORMANCE_BASELINES = "performanceBaselines"
     const val PERFORMANCE_TEST_VERBOSE = "performanceTest.verbose"
     const val PERFORMANCE_DB_PASSWORD = "org.gradle.performance.db.password"
     const val PERFORMANCE_DB_PASSWORD_ENV = "PERFORMANCE_DB_PASSWORD_TCAGENT"
+    const val PERFORMANCE_CHANNEL_ENV = "PERFORMANCE_CHANNEL"
     const val PERFORMANCE_DB_URL = "org.gradle.performance.db.url"
     const val PERFORMANCE_DB_USERNAME = "org.gradle.performance.db.username"
     const val PERFORMANCE_DEPENDENCY_BUILD_IDS = "org.gradle.performance.dependencyBuildIds"
     const val PERFORMANCE_MAX_PROJECTS = "maxProjects"
     const val RERUN_ALL_TESTS = "rerunAllTests"
     const val PREDICTIVE_TEST_SELECTION_ENABLED = "enablePredictiveTestSelection"
+    const val TEST_DISTRIBUTION_DOGFOODING_TAG = "testDistributionDogfoodingTag"
     const val TEST_DISTRIBUTION_ENABLED = "enableTestDistribution"
     const val TEST_DISTRIBUTION_PARTITION_SIZE = "testDistributionPartitionSizeInSeconds"
+    const val TEST_DISTRIBUTION_SERVER_URL = "testDistributionServerUrl"
     const val TEST_SPLIT_INCLUDE_TEST_CLASSES = "includeTestClasses"
     const val TEST_SPLIT_EXCLUDE_TEST_CLASSES = "excludeTestClasses"
     const val TEST_SPLIT_ONLY_TEST_GRADLE_VERSION = "onlyTestGradleVersion"
@@ -125,11 +135,14 @@ object BuildParams {
     const val RUN_ANDROID_STUDIO_IN_HEADLESS_MODE = "runAndroidStudioInHeadlessMode"
     const val STUDIO_HOME = "studioHome"
     const val BUNDLE_GROOVY_4 = "bundleGroovy4"
+    const val DEBUG_DAEMON = "debugDaemon"
+    const val DEBUG_LAUNCHER = "debugLauncher"
 
     /**
      * Run docs tests with the configuration cache enabled.
      */
     const val ENABLE_CONFIGURATION_CACHE_FOR_DOCS_TESTS = "enableConfigurationCacheForDocsTests"
+
     /**
      * Run docs tests that are knowingly broken when running with the configuration cache enabled. Only applied when #ENABLE_CONFIGURATION_CACHE_FOR_DOCS_TESTS is also set.
      */
@@ -190,14 +203,13 @@ val Project.buildBranch: Provider<String>
 
 /**
  * The logical branch.
- * For non-pre-tested commit branches this is the same as {@link #buildBranch}.
- * For pre-tested commit branches, this is the branch which will be forwarded to the state on this branch when
- * pre-tested commit passes.
+ * For non-merge-queue branches this is the same as {@link #buildBranch}.
+ * For merge-queue branches, this is the base branch.
  *
- * For example, for the pre-tested commit branch "pre-test/master/queue/alice/personal-branch" the logical branch is "master".
+ * For example, for the merge queue branch "gh-readonly-queue/master/pr-12345-1a2b3c4d" the logical branch is "master".
  */
 val Project.logicalBranch: Provider<String>
-    get() = buildBranch.map(::toPreTestedCommitBaseBranch)
+    get() = buildBranch.map(::toMergeQueueBaseBranch)
 
 
 val Project.buildCommitId: Provider<String>
@@ -209,10 +221,6 @@ val Project.buildCommitId: Provider<String>
 
 val Project.isBuildCommitDistribution: Boolean
     get() = gradleProperty(BUILD_COMMIT_DISTRIBUTION).map { it.toBoolean() }.orElse(false).get()
-
-
-val Project.buildConfigurationId: Provider<String>
-    get() = environmentVariable(BUILD_CONFIGURATION_ID)
 
 
 val Project.buildFinalRelease: Provider<String>
@@ -231,10 +239,6 @@ val Project.buildRunningOnCi: Provider<Boolean>
     get() = environmentVariable(CI_ENVIRONMENT_VARIABLE).presence()
 
 
-val Project.buildServerUrl: Provider<String>
-    get() = environmentVariable(BUILD_SERVER_URL)
-
-
 val Project.buildMilestoneNumber: Provider<String>
     get() = gradleProperty(BUILD_MILESTONE_NUMBER)
 
@@ -250,6 +254,16 @@ val Project.buildVersionQualifier: Provider<String>
 val Project.defaultPerformanceBaselines: Provider<String>
     get() = gradleProperty(DEFAULT_PERFORMANCE_BASELINES)
 
+
+// null means no limit: use all available executors
+val Project.maxTestDistributionRemoteExecutors: Int?
+    get() = gradleProperty(MAX_TEST_DISTRIBUTION_REMOTE_EXECUTORS).orNull?.toInt()
+
+val Project.maxTestDistributionLocalExecutors: Int?
+    get() = gradleProperty(MAX_TEST_DISTRIBUTION_LOCAL_EXECUTORS).orNull?.toInt()
+
+val Project.toolchainInstallationPaths: Provider<String>
+    get() = gradleProperty(JAVA_INSTALLATIONS_PATHS_PROPERTY)
 
 val Project.flakyTestStrategy: FlakyTestStrategy
     get() = gradleProperty(FLAKY_TEST).let {
@@ -272,6 +286,11 @@ val Project.performanceDependencyBuildIds: Provider<String>
 val Project.performanceBaselines: String?
     get() = stringPropertyOrNull(PERFORMANCE_BASELINES)
 
+val Project.performanceChannel: Provider<String>
+    get() = environmentVariable(PERFORMANCE_CHANNEL_ENV).orElse(provider {
+        val channelSuffix = if (OperatingSystem.current().isLinux) "" else "-${OperatingSystem.current().familyName.lowercase()}"
+        "commits$channelSuffix-${buildBranch.get()}"
+     })
 
 val Project.performanceDbPassword: Provider<String>
     get() = environmentVariable(PERFORMANCE_DB_PASSWORD_ENV)
@@ -343,16 +362,21 @@ val Project.predictiveTestSelectionEnabled: Provider<Boolean>
         .map { it.toBoolean() }
         .orElse(
             buildBranch.zip(buildRunningOnCi) { branch, ci ->
-                val protectedBranches = listOf("master", "release")
-                ci && !protectedBranches.contains(branch) && !branch.startsWith("pre-test/")
+                ci && !listOf("master", "release", "gh-readonly-queue/").any { branch.startsWith(it) }
             }
         ).zip(project.rerunAllTests) { enabled, rerunAllTests ->
             enabled && !rerunAllTests
         }
 
+val Project.testDistributionDogfoodingTag: Provider<String>
+    get() = gradleProperty(TEST_DISTRIBUTION_DOGFOODING_TAG)
 
 val Project.testDistributionEnabled: Boolean
     get() = systemProperty(TEST_DISTRIBUTION_ENABLED).orNull?.toBoolean() == true
+
+
+val Project.testDistributionServerUrl: Provider<String>
+    get() = gradleProperty(TEST_DISTRIBUTION_SERVER_URL)
 
 
 // Controls the test distribution partition size. The test classes smaller than this value will be merged into a "partition"
@@ -407,3 +431,9 @@ val Project.isPromotionBuild: Boolean
  */
 val Project.isBundleGroovy4: Boolean
     get() = systemProperty(BUNDLE_GROOVY_4).orNull.toBoolean()
+
+val Project.daemonDebuggingIsEnabled: Boolean
+    get() = propertyFromAnySource(DEBUG_DAEMON).isPresent
+
+val Project.launcherDebuggingIsEnabled: Boolean
+    get() = propertyFromAnySource(DEBUG_LAUNCHER).isPresent

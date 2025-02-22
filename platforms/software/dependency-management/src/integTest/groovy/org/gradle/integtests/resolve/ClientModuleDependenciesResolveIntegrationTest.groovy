@@ -32,8 +32,8 @@ class ClientModuleDependenciesResolveIntegrationTest extends AbstractHttpDepende
         and:
         buildFile << """
 repositories {
-    ivy { url "${repo1.uri}" }
-    maven { url "${repo2.uri}" }
+    ivy { url = "${repo1.uri}" }
+    maven { url = "${repo2.uri}" }
 }
 configurations { compile }
 dependencies {
@@ -56,12 +56,14 @@ task listJars {
         projectAInRepo2.artifact.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listJars')
 
         when:
         server.resetExpectations()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listJars')
 
     }
@@ -77,7 +79,7 @@ task listJars {
         and:
         buildFile << """
 repositories {
-    maven { url "${repo.uri}" }
+    maven { url = "${repo.uri}" }
 }
 configurations { compile }
 dependencies {
@@ -103,12 +105,14 @@ task listJars {
         projectC.artifact.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listJars')
 
         when:
         server.resetExpectations()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listJars')
     }
 
@@ -122,7 +126,7 @@ task listJars {
 
         buildFile << """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -149,6 +153,7 @@ task listClientModuleJars {
         projectA.jar.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
 
         when:
@@ -156,12 +161,14 @@ task listClientModuleJars {
         projectA.getArtifact(classifier: "extra").expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listJars')
 
         when:
         server.resetExpectations()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
     }
 
@@ -175,7 +182,7 @@ task listClientModuleJars {
 
         buildFile << """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -201,12 +208,13 @@ task listClientModuleJars {
         projectA.getArtifact(classifier: "extra").expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
 
         when:
         buildFile.text = """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -229,6 +237,7 @@ task listClientModuleJars {
         server.resetExpectations()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
     }
 
@@ -246,7 +255,7 @@ task listClientModuleJars {
 
         buildFile << """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -274,12 +283,13 @@ task listClientModuleJars {
         projectB.jar.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
 
         when:
         buildFile.text = """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -302,6 +312,7 @@ task listClientModuleJars {
         server.resetExpectations()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
     }
 
@@ -315,7 +326,7 @@ task listClientModuleJars {
 
         buildFile << """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     clientModule {
@@ -341,12 +352,13 @@ task listClientModuleJars {
         projectA.jar.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
 
         when:
         buildFile.text = """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     clientModule {
@@ -372,6 +384,7 @@ task listClientModuleJars {
         projectA.jar.expectHead()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
     }
 
@@ -389,7 +402,7 @@ task listClientModuleJars {
 
         buildFile << """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -418,12 +431,13 @@ task listClientModuleJars {
         projectB.jar.expectGet()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
 
         when:
         buildFile.text = """
 repositories {
-    ivy { url "${ivyHttpRepo.uri}" }
+    ivy { url = "${ivyHttpRepo.uri}" }
 }
 configurations {
     regular
@@ -450,6 +464,7 @@ task listClientModuleJars {
         projectA.jar.expectHead()
 
         then:
+        executer.expectDocumentedDeprecationWarning("Declaring client module dependencies has been deprecated. This is scheduled to be removed in Gradle 9.0. Please use component metadata rules instead. Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_8.html#declaring_client_module_dependencies")
         succeeds('listClientModuleJars')
     }
 }

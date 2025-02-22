@@ -15,18 +15,17 @@
  */
 package org.gradle.platform.base.internal;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.NamedDomainObjectSet;
-import org.gradle.api.specs.Spec;
 import org.gradle.platform.base.Platform;
 import org.gradle.platform.base.PlatformContainer;
 import org.gradle.util.internal.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class DefaultPlatformResolvers implements PlatformResolvers {
-    private final List<PlatformResolver<?>> platformResolvers = Lists.newArrayList();
+    private final List<PlatformResolver<?>> platformResolvers = new ArrayList<>();
     private final PlatformContainer platforms;
 
     public DefaultPlatformResolvers(PlatformContainer platforms) {
@@ -56,12 +55,7 @@ public class DefaultPlatformResolvers implements PlatformResolvers {
         final String target = platformRequirement.getPlatformName();
 
         NamedDomainObjectSet<T> allWithType = platforms.withType(type);
-        T matching = CollectionUtils.findFirst(allWithType, new Spec<T>() {
-            @Override
-            public boolean isSatisfiedBy(T element) {
-                return element.getName().equals(target);
-            }
-        });
+        T matching = CollectionUtils.findFirst(allWithType, element -> element.getName().equals(target));
 
         if (matching == null) {
             throw new InvalidUserDataException(String.format("Invalid %s: %s", type.getSimpleName(), target));

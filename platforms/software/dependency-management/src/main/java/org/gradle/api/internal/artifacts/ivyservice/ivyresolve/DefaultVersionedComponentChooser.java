@@ -20,8 +20,6 @@ import org.gradle.api.artifacts.ComponentMetadata;
 import org.gradle.api.artifacts.ComponentSelection;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
-import org.gradle.api.attributes.AttributeContainer;
-import org.gradle.api.attributes.AttributesSchema;
 import org.gradle.api.internal.artifacts.ComponentSelectionInternal;
 import org.gradle.api.internal.artifacts.ComponentSelectionRulesInternal;
 import org.gradle.api.internal.artifacts.DefaultComponentSelection;
@@ -30,9 +28,11 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionP
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector;
 import org.gradle.api.internal.artifacts.repositories.ArtifactResolutionDetails;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
-import org.gradle.api.internal.attributes.AttributesSchemaInternal;
+import org.gradle.api.internal.attributes.AttributeSchemaServices;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
-import org.gradle.internal.component.external.model.ModuleComponentGraphResolveMetadata;
+import org.gradle.api.internal.attributes.immutable.ImmutableAttributesSchema;
+import org.gradle.api.internal.attributes.matching.AttributeMatcher;
+import org.gradle.internal.component.external.model.ExternalModuleComponentGraphResolveMetadata;
 import org.gradle.internal.component.model.ComponentGraphResolveMetadata;
 import org.gradle.internal.resolve.RejectedByAttributesVersion;
 import org.gradle.internal.resolve.RejectedByRuleVersion;
@@ -49,19 +49,27 @@ import java.util.List;
 class DefaultVersionedComponentChooser implements VersionedComponentChooser {
     private final ComponentSelectionRulesProcessor rulesProcessor = new ComponentSelectionRulesProcessor();
     private final VersionComparator versionComparator;
+    private final AttributeSchemaServices attributeSchemaServices;
     private final ComponentSelectionRulesInternal componentSelectionRules;
     private final VersionParser versionParser;
-    private final AttributesSchemaInternal attributesSchema;
+    private final ImmutableAttributesSchema consumerSchema;
 
-    DefaultVersionedComponentChooser(VersionComparator versionComparator, VersionParser versionParser, ComponentSelectionRulesInternal componentSelectionRules, AttributesSchema attributesSchema) {
+    DefaultVersionedComponentChooser(
+        VersionComparator versionComparator,
+        VersionParser versionParser,
+        AttributeSchemaServices attributeSchemaServices,
+        ComponentSelectionRulesInternal componentSelectionRules,
+        ImmutableAttributesSchema consumerSchema
+    ) {
         this.versionComparator = versionComparator;
         this.versionParser = versionParser;
+        this.attributeSchemaServices = attributeSchemaServices;
         this.componentSelectionRules = componentSelectionRules;
-        this.attributesSchema = (AttributesSchemaInternal) attributesSchema;
+        this.consumerSchema = consumerSchema;
     }
 
     @Override
-    public ComponentGraphResolveMetadata selectNewestComponent(@Nullable ModuleComponentGraphResolveMetadata one, @Nullable ModuleComponentGraphResolveMetadata two) {
+    public ComponentGraphResolveMetadata selectNewestComponent(@Nullable ExternalModuleComponentGraphResolveMetadata one, @Nullable ExternalModuleComponentGraphResolveMetadata two) {
         if (one == null || two == null) {
             return two == null ? one : two;
         }
@@ -78,7 +86,7 @@ class DefaultVersionedComponentChooser implements VersionedComponentChooser {
         return comparison < 0 ? two : one;
     }
 
-    private boolean isMissingModuleDescriptor(ModuleComponentGraphResolveMetadata metadata) {
+    private boolean isMissingModuleDescriptor(ExternalModuleComponentGraphResolveMetadata metadata) {
         return metadata.isMissing();
     }
 
@@ -91,7 +99,7 @@ class DefaultVersionedComponentChooser implements VersionedComponentChooser {
         Action<? super ArtifactResolutionDetails> contentFilter = result.getContentFilter();
         for (ModuleComponentResolveState candidate : resolveStates) {
             if (contentFilter != null) {
-                DynamicArtifactResolutionDetails details = new DynamicArtifactResolutionDetails(candidate, result.getConfigurationName(), result.getConsumerAttributes());
+                DynamicArtifactResolutionDetails details = new DynamicArtifactResolutionDetails(candidate);
                 contentFilter.execute(details);
                 if (!details.found) {
                     continue;
@@ -148,10 +156,15 @@ class DefaultVersionedComponentChooser implements VersionedComponentChooser {
         // Component metadata may not necessarily hit the network if there is a custom component metadata supplier
         ComponentMetadata componentMetadata = provider.getComponentMetadata();
         if (componentMetadata != null) {
-            AttributeContainerInternal attributes = (AttributeContainerInternal) componentMetadata.getAttributes();
-            boolean matching = attributesSchema.matcher().isMatching(attributes, consumerAttributes);
+
+            // TODO: Do not assume the producer schema is empty.
+            ImmutableAttributesSchema producerSchema = ImmutableAttributesSchema.EMPTY;
+            AttributeMatcher matcher = attributeSchemaServices.getMatcher(consumerSchema, producerSchema);
+
+            ImmutableAttributes attributes = ((AttributeContainerInternal) componentMetadata.getAttributes()).asImmutable();
+            boolean matching = matcher.isMatchingCandidate(attributes.asImmutable(), consumerAttributes);
             if (!matching) {
-                return new RejectedByAttributesVersion(id, attributesSchema.matcher().describeMatching(attributes, consumerAttributes));
+                return new RejectedByAttributesVersion(id, matcher.describeMatching(attributes, consumerAttributes));
             }
         }
         return null;
@@ -227,14 +240,10 @@ class DefaultVersionedComponentChooser implements VersionedComponentChooser {
 
     private static class DynamicArtifactResolutionDetails implements ArtifactResolutionDetails {
         private final ModuleComponentResolveState resolveState;
-        private final String configurationName;
-        private final ImmutableAttributes consumerAttributes;
         boolean found = true;
 
-        public DynamicArtifactResolutionDetails(ModuleComponentResolveState resolveState, String configurationName, ImmutableAttributes consumerAttributes) {
+        public DynamicArtifactResolutionDetails(ModuleComponentResolveState resolveState) {
             this.resolveState = resolveState;
-            this.configurationName = configurationName;
-            this.consumerAttributes = consumerAttributes;
         }
 
         @Override
@@ -246,16 +255,6 @@ class DefaultVersionedComponentChooser implements VersionedComponentChooser {
         @Nullable
         public ModuleComponentIdentifier getComponentId() {
             return resolveState.getId();
-        }
-
-        @Override
-        public AttributeContainer getConsumerAttributes() {
-            return consumerAttributes;
-        }
-
-        @Override
-        public String getConsumerName() {
-            return configurationName;
         }
 
         @Override

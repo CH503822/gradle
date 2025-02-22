@@ -17,9 +17,9 @@ package org.gradle.plugins.ide.eclipse;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.ExtensiblePolymorphicDomainObjectContainer;
 import org.gradle.api.JavaVersion;
@@ -71,8 +71,10 @@ import org.gradle.testing.base.plugins.TestSuiteBasePlugin;
 
 import javax.inject.Inject;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -245,7 +247,7 @@ public abstract class EclipsePlugin extends IdePlugin {
                     @Override
                     public void execute(Project p) {
                         // keep the ordering we had in earlier gradle versions
-                        Set<String> containers = Sets.newLinkedHashSet();
+                        Set<String> containers = new LinkedHashSet<>();
                         containers.add("org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/" + model.getJdt().getJavaRuntimeName() + "/");
                         containers.addAll(model.getClasspath().getContainers());
                         model.getClasspath().setContainers(containers);
@@ -267,7 +269,7 @@ public abstract class EclipsePlugin extends IdePlugin {
                     @Override
                     public Collection<Configuration> call() {
                         SourceSetContainer sourceSets = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
-                        List<Configuration> sourceSetsConfigurations = Lists.newArrayListWithCapacity(sourceSets.size() * 2);
+                        List<Configuration> sourceSetsConfigurations = new ArrayList<>(sourceSets.size() * 2);
                         ConfigurationContainer configurations = project.getConfigurations();
                         for (SourceSet sourceSet : sourceSets) {
                             sourceSetsConfigurations.add(configurations.getByName(sourceSet.getCompileClasspathConfigurationName()));
@@ -280,7 +282,7 @@ public abstract class EclipsePlugin extends IdePlugin {
                 ((IConventionAware) model.getClasspath()).getConventionMapping().map("classFolders", new Callable<List<File>>() {
                     @Override
                     public List<File> call() {
-                        List<File> result = Lists.newArrayList();
+                        List<File> result = new ArrayList<>();
                         for (SourceSet sourceSet : project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()) {
                             result.addAll(sourceSet.getOutput().getDirs().getFiles());
                         }
@@ -367,7 +369,7 @@ public abstract class EclipsePlugin extends IdePlugin {
 
                 // exclude the dependencies already provided by SCALA_CONTAINER; prevents problems with Eclipse Scala plugin
                 project.getGradle().projectsEvaluated(gradle -> {
-                    final List<String> provided = Lists.newArrayList("scala-library", "scala-swing", "scala-dbc");
+                    Set<String> provided = ImmutableSet.of("scala-library", "scala-swing", "scala-dbc");
                     Predicate<Dependency> dependencyInProvided = dependency -> provided.contains(dependency.getName());
                     List<Dependency> dependencies = Lists.newArrayList(Iterables.filter(Iterables.concat(Iterables.transform(model.getClasspath().getPlusConfigurations(), new Function<Configuration, Iterable<Dependency>>() {
                         @Override

@@ -24,6 +24,8 @@ import org.gradle.internal.Cast;
 import org.gradle.internal.Describables;
 import org.gradle.internal.DisplayName;
 import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.evaluation.EvaluationContext;
+import org.gradle.internal.evaluation.EvaluationScopeContext;
 import org.gradle.internal.logging.text.TreeFormatter;
 import org.gradle.internal.state.Managed;
 
@@ -139,7 +141,7 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
     @Override
     public void visitDependencies(TaskDependencyResolveContext context) {
         // When used as an input, add the producing tasks if known
-        getProducer().visitProducerTasks(context);
+        getProducer().visitDependencies(context);
     }
 
     @Override
@@ -154,13 +156,25 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
 
     @Override
     public ProviderInternal<T> asSupplier(DisplayName owner, Class<? super T> targetType, ValueSanitizer<? super T> sanitizer) {
-        if (getType() != null && !targetType.isAssignableFrom(getType())) {
-            throw new IllegalArgumentException(String.format("Cannot set the value of %s of type %s using a provider of type %s.", owner.getDisplayName(), targetType.getName(), getType().getName()));
-        } else if (getType() == null) {
+        Class<T> selfType = getType();
+        if (selfType != null && !targetType.isAssignableFrom(selfType)) {
+            throw new IllegalArgumentException(formatInvalidTypeException(owner.getDisplayName(), targetType, selfType));
+        } else if (selfType == null) {
             return new MappingProvider<>(Cast.uncheckedCast(targetType), this, new TypeSanitizingTransformer<>(owner, sanitizer, targetType));
         } else {
             return this;
         }
+    }
+
+    private static String formatInvalidTypeException(String owner, Class<?> targetType, Class<?> selfType) {
+        String targetTypeName = targetType.getName();
+        String selfTypeName = selfType.getName();
+        if (targetTypeName.equals(selfTypeName)) {
+            // This may happen when the same type is loaded by different classloaders.
+            targetTypeName = targetTypeName + " loaded with " + targetType.getClassLoader();
+            selfTypeName = selfTypeName + " loaded with " + selfType.getClassLoader();
+        }
+        return String.format("Cannot set the value of %s of type %s using a provider of type %s.", owner, targetTypeName, selfTypeName);
     }
 
     @Override
@@ -169,10 +183,9 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
     }
 
     @Override
-    public String toString() {
-        // NOTE: Do not realize the value of the Provider in toString().  The debugger will try to call this method and make debugging really frustrating.
-        Class<?> type = getType();
-        return String.format("provider(%s)", type == null ? "?" : type.getName());
+    public final String toString() {
+        // Override #toStringNoReentrance instead
+        return EvaluationContext.current().tryEvaluate(this, "<CIRCULAR REFERENCE>", this::toStringNoReentrance);
     }
 
     @Override
@@ -207,5 +220,25 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
             formatter.endChildren();
         }
         return formatter.toString();
+    }
+
+    /**
+     * Marks this provider as being evaluated until the returned scope is closed.
+     *
+     * @return the scope
+     */
+    protected EvaluationScopeContext openScope() {
+        return EvaluationContext.current().open(this);
+    }
+
+    /**
+     * An implementation for the toString method that is never called if the current provider is being evaluated.
+     *
+     * @return the string representation of the provider
+     */
+    protected String toStringNoReentrance() {
+        // NOTE: Do not realize the value of the Provider in toString().  The debugger will try to call this method and make debugging really frustrating.
+        Class<?> type = getType();
+        return String.format("provider(%s)", type == null ? "?" : type.getName());
     }
 }

@@ -16,7 +16,6 @@
 
 package org.gradle.api.internal.artifacts.repositories;
 
-import com.google.common.base.Suppliers;
 import org.gradle.api.Action;
 import org.gradle.api.ActionConfiguration;
 import org.gradle.api.NamedDomainObjectCollection;
@@ -28,6 +27,7 @@ import org.gradle.api.artifacts.repositories.ArtifactRepository;
 import org.gradle.api.artifacts.repositories.MetadataSupplierAware;
 import org.gradle.api.artifacts.repositories.RepositoryContentDescriptor;
 import org.gradle.api.artifacts.repositories.RepositoryResourceAccessor;
+import org.gradle.api.attributes.Attribute;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser;
 import org.gradle.api.internal.artifacts.repositories.resolver.ExternalRepositoryResourceAccessor;
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport;
@@ -42,11 +42,15 @@ import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resolve.caching.ImplicitInputsCapturingInstantiator;
 import org.gradle.internal.resource.local.FileStore;
-import org.gradle.internal.service.DefaultServiceRegistry;
+import org.gradle.internal.service.Provides;
+import org.gradle.internal.service.ServiceRegistrationProvider;
+import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.ServiceRegistryBuilder;
 
 import javax.annotation.Nullable;
 import java.net.URI;
-import java.util.function.Supplier;
+import java.util.Map;
+import java.util.Set;
 
 public abstract class AbstractArtifactRepository implements ArtifactRepositoryInternal, ContentFilteringRepository, MetadataSupplierAware {
     private String name;
@@ -56,12 +60,11 @@ public abstract class AbstractArtifactRepository implements ArtifactRepositoryIn
     private Action<? super ActionConfiguration> componentMetadataSupplierRuleConfiguration;
     private Action<? super ActionConfiguration> componentMetadataListerRuleConfiguration;
     private final ObjectFactory objectFactory;
-    private final Supplier<RepositoryContentDescriptorInternal> repositoryContentDescriptor = Suppliers.memoize(this::createRepositoryDescriptor)::get;
-    private final VersionParser versionParser;
+    private final RepositoryContentDescriptorInternal repositoryContentDescriptor;
 
     protected AbstractArtifactRepository(ObjectFactory objectFactory, VersionParser versionParser) {
-       this.objectFactory = objectFactory;
-        this.versionParser = versionParser;
+        this.objectFactory = objectFactory;
+        this.repositoryContentDescriptor = createRepositoryDescriptor(versionParser);
     }
 
     @Override
@@ -112,27 +115,38 @@ public abstract class AbstractArtifactRepository implements ArtifactRepositoryIn
     }
 
     @Override
-    public RepositoryContentDescriptorInternal createRepositoryDescriptor() {
+    public RepositoryContentDescriptorInternal createRepositoryDescriptor(VersionParser versionParser) {
         return new DefaultRepositoryContentDescriptor(this::getDisplayName, versionParser);
     }
 
     @Override
     public RepositoryContentDescriptorInternal getRepositoryDescriptorCopy() {
-        return repositoryContentDescriptor.get().asMutableCopy();
-    }
-
-    RepositoryContentDescriptorInternal getRepositoryDescriptor() {
-        return repositoryContentDescriptor.get();
+        return repositoryContentDescriptor.asMutableCopy();
     }
 
     @Override
     public Action<? super ArtifactResolutionDetails> getContentFilter() {
-        return repositoryContentDescriptor.get().toContentFilter();
+        return repositoryContentDescriptor.toContentFilter();
+    }
+
+    @Override
+    public Set<String> getIncludedConfigurations() {
+        return repositoryContentDescriptor.getIncludedConfigurations();
+    }
+
+    @Override
+    public Set<String> getExcludedConfigurations() {
+        return repositoryContentDescriptor.getExcludedConfigurations();
+    }
+
+    @Override
+    public Map<Attribute<Object>, Set<Object>> getRequiredAttributes() {
+        return repositoryContentDescriptor.getRequiredAttributes();
     }
 
     @Override
     public void content(Action<? super RepositoryContentDescriptor> configureAction) {
-        configureAction.execute(repositoryContentDescriptor.get());
+        configureAction.execute(repositoryContentDescriptor);
     }
 
     @Nullable
@@ -160,14 +174,19 @@ public abstract class AbstractArtifactRepository implements ArtifactRepositoryIn
      * @return a dependency injecting instantiator, aware of services we want to expose
      */
     ImplicitInputsCapturingInstantiator createInjectorForMetadataSuppliers(final RepositoryTransport transport, InstantiatorFactory instantiatorFactory, final URI rootUri, final FileStore<String> externalResourcesFileStore) {
-        DefaultServiceRegistry registry = new DefaultServiceRegistry();
-        registry.addProvider(new Object() {
-            RepositoryResourceAccessor createResourceAccessor() {
-                return createRepositoryAccessor(transport, rootUri, externalResourcesFileStore);
-            }
-        });
-        registry.add(ObjectFactory.class, objectFactory);
-        return new ImplicitInputsCapturingInstantiator(registry, instantiatorFactory);
+        ServiceRegistry serviceRegistry = ServiceRegistryBuilder.builder()
+            .displayName("implicit inputs capturing instantiator services")
+            .provider(new ServiceRegistrationProvider() {
+                @Provides
+                RepositoryResourceAccessor createResourceAccessor() {
+                    return createRepositoryAccessor(transport, rootUri, externalResourcesFileStore);
+                }
+            })
+            .provider(registration -> {
+                registration.add(ObjectFactory.class, objectFactory);
+            })
+            .build();
+        return new ImplicitInputsCapturingInstantiator(serviceRegistry, instantiatorFactory);
     }
 
     protected RepositoryResourceAccessor createRepositoryAccessor(RepositoryTransport transport, URI rootUri, FileStore<String> externalResourcesFileStore) {

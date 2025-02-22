@@ -22,8 +22,8 @@ import org.gradle.api.Action;
 import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.ComponentMetadataListerDetails;
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails;
-import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.artifacts.repositories.AuthenticationContainer;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
@@ -57,7 +57,6 @@ import org.gradle.internal.action.InstantiatingAction;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata;
 import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata;
-import org.gradle.internal.component.external.model.ModuleDependencyMetadata;
 import org.gradle.internal.component.external.model.MutableModuleComponentResolveMetadata;
 import org.gradle.internal.component.external.model.maven.MutableMavenModuleResolveMetadata;
 import org.gradle.internal.component.model.ComponentOverrideMetadata;
@@ -98,7 +97,6 @@ public class DefaultMavenArtifactRepository extends AbstractAuthenticationSuppor
     private final ChecksumService checksumService;
     private final MavenMetadataSources metadataSources = new MavenMetadataSources();
     private final InstantiatorFactory instantiatorFactory;
-    private final VersionParser versionParser;
 
     public DefaultMavenArtifactRepository(FileResolver fileResolver,
                                           RepositoryTransportFactory transportFactory,
@@ -158,7 +156,6 @@ public class DefaultMavenArtifactRepository extends AbstractAuthenticationSuppor
         this.checksumService = checksumService;
         this.metadataSources.setDefaults();
         this.instantiatorFactory = instantiatorFactory;
-        this.versionParser = versionParser;
     }
 
     @Override
@@ -206,7 +203,7 @@ public class DefaultMavenArtifactRepository extends AbstractAuthenticationSuppor
     @Override
     public void artifactUrls(Object... urls) {
         invalidateDescriptor();
-        additionalUrls.addAll(Lists.newArrayList(urls));
+        additionalUrls.addAll(ImmutableList.copyOf(urls));
     }
 
     @Override
@@ -344,13 +341,8 @@ public class DefaultMavenArtifactRepository extends AbstractAuthenticationSuppor
     }
 
     @Override
-    public RepositoryContentDescriptorInternal createRepositoryDescriptor() {
+    public RepositoryContentDescriptorInternal createRepositoryDescriptor(VersionParser versionParser) {
         return new DefaultMavenRepositoryContentDescriptor(this::getDisplayName, versionParser);
-    }
-
-    @Override
-    public RepositoryContentDescriptorInternal getRepositoryDescriptorCopy() {
-        return getRepositoryDescriptor().asMutableCopy();
     }
 
     private static class DefaultDescriber implements Transformer<String, MavenArtifactRepository> {
@@ -467,8 +459,8 @@ public class DefaultMavenArtifactRepository extends AbstractAuthenticationSuppor
         }
 
         @Override
-        public void listModuleVersions(ModuleDependencyMetadata dependency, ModuleIdentifier module, List<ResourcePattern> ivyPatterns, List<ResourcePattern> artifactPatterns, VersionLister versionLister, BuildableModuleVersionListingResolveResult result) {
-            delegate.listModuleVersions(dependency, module, ivyPatterns, artifactPatterns, versionLister, result);
+        public void listModuleVersions(ModuleComponentSelector selector, ComponentOverrideMetadata overrideMetadata, List<ResourcePattern> ivyPatterns, List<ResourcePattern> artifactPatterns, VersionLister versionLister, BuildableModuleVersionListingResolveResult result) {
+            delegate.listModuleVersions(selector, overrideMetadata, ivyPatterns, artifactPatterns, versionLister, result);
         }
     }
 }

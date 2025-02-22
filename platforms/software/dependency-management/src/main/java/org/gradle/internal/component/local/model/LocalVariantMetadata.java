@@ -24,6 +24,8 @@ import org.gradle.internal.component.model.DefaultVariantMetadata;
 import org.gradle.internal.component.model.VariantResolveMetadata;
 import org.gradle.internal.model.CalculatedValue;
 
+import javax.annotation.Nullable;
+
 /**
  * Implementation of {@link VariantResolveMetadata} which allows variant artifacts to be calculated lazily
  * while holding a project lock.
@@ -31,14 +33,9 @@ import org.gradle.internal.model.CalculatedValue;
 public final class LocalVariantMetadata extends DefaultVariantMetadata {
     private final CalculatedValue<ImmutableList<LocalComponentArtifactMetadata>> artifacts;
 
-    public LocalVariantMetadata(String name, Identifier identifier, DisplayName displayName, ImmutableAttributes attributes, ImmutableCapabilities capabilities, CalculatedValue<ImmutableList<LocalComponentArtifactMetadata>> artifacts) {
+    public LocalVariantMetadata(String name, @Nullable Identifier identifier, DisplayName displayName, ImmutableAttributes attributes, ImmutableCapabilities capabilities, CalculatedValue<ImmutableList<LocalComponentArtifactMetadata>> artifacts) {
         super(name, identifier, displayName, attributes, ImmutableList.of(), capabilities);
         this.artifacts = artifacts;
-    }
-
-    public LocalVariantMetadata prepareToResolveArtifacts() {
-        artifacts.finalizeIfNotAlready();
-        return this;
     }
 
     @Override
@@ -48,6 +45,7 @@ public final class LocalVariantMetadata extends DefaultVariantMetadata {
 
     @Override
     public ImmutableList<LocalComponentArtifactMetadata> getArtifacts() {
+        artifacts.finalizeIfNotAlready();
         return artifacts.get();
     }
 }

@@ -19,9 +19,11 @@ package org.gradle.process.internal.worker;
 import org.gradle.api.Action;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.internal.id.IdGenerator;
+import org.gradle.internal.jvm.JpmsConfiguration;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.jvm.inspection.JvmVersionDetector;
 import org.gradle.internal.logging.events.OutputEventListener;
+import org.gradle.internal.nativeintegration.services.NativeServices.NativeServicesMode;
 import org.gradle.internal.remote.Address;
 import org.gradle.internal.remote.ConnectionAcceptor;
 import org.gradle.internal.remote.MessagingServer;
@@ -36,8 +38,6 @@ import org.gradle.process.internal.health.memory.MemoryManager;
 import org.gradle.process.internal.worker.child.ApplicationClassesInSystemClassLoaderWorkerImplementationFactory;
 import org.gradle.process.internal.worker.child.WorkerJvmMemoryInfoProtocol;
 import org.gradle.process.internal.worker.child.WorkerLoggingProtocol;
-import org.gradle.process.internal.worker.problem.WorkerProblemProtocol;
-import org.gradle.process.internal.worker.problem.WorkerProblemSerializer;
 import org.gradle.util.internal.GUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -71,6 +72,8 @@ public class DefaultWorkerProcessBuilder implements WorkerProcessBuilder {
     private List<URL> implementationClassPath;
     private List<URL> implementationModulePath;
     private boolean shouldPublishJvmMemoryInfo;
+    private NativeServicesMode nativeServicesMode = NativeServicesMode.NOT_SET;
+    private boolean addJpmsCompatibilityFlags = true;
 
     DefaultWorkerProcessBuilder(
         JavaExecHandleFactory execHandleFactory,
@@ -202,31 +205,36 @@ public class DefaultWorkerProcessBuilder implements WorkerProcessBuilder {
     }
 
     @Override
+    public void setNativeServicesMode(NativeServicesMode nativeServicesMode) {
+        this.nativeServicesMode = nativeServicesMode;
+    }
+
+    @Override
+    public NativeServicesMode getNativeServicesMode() {
+        return nativeServicesMode;
+    }
+
+    @Override
+    public WorkerProcessBuilder setAddJpmsCompatibilityFlags(boolean addJpmsCompatibilityFlags) {
+        this.addJpmsCompatibilityFlags = addJpmsCompatibilityFlags;
+        return this;
+    }
+
+    @Override
     public WorkerProcess build() {
         final WorkerJvmMemoryStatus memoryStatus = shouldPublishJvmMemoryInfo ? new WorkerJvmMemoryStatus() : null;
         final DefaultWorkerProcess workerProcess = new DefaultWorkerProcess(connectTimeoutSeconds, TimeUnit.SECONDS, memoryStatus);
-        ConnectionAcceptor acceptor = server.accept(new Action<ObjectConnection>() {
-            @Override
-            public void execute(final ObjectConnection connection) {
-                workerProcess.onConnect(connection, new Runnable() {
-                    @Override
-                    public void run() {
-                        DefaultWorkerLoggingProtocol defaultWorkerLoggingProtocol = new DefaultWorkerLoggingProtocol(outputEventListener);
-                        connection.useParameterSerializers(WorkerLoggingSerializer.create());
-                        connection.addIncoming(WorkerLoggingProtocol.class, defaultWorkerLoggingProtocol);
+        ConnectionAcceptor acceptor = server.accept(connection ->
+            workerProcess.onConnect(connection, () -> {
+                DefaultWorkerLoggingProtocol defaultWorkerLoggingProtocol = new DefaultWorkerLoggingProtocol(outputEventListener);
+                connection.useParameterSerializers(WorkerLoggingSerializer.create());
+                connection.addIncoming(WorkerLoggingProtocol.class, defaultWorkerLoggingProtocol);
 
-                        DefaultWorkerProblemProtocol defaultWorkerProblemProtocol = new DefaultWorkerProblemProtocol();
-                        connection.useParameterSerializers(WorkerProblemSerializer.create());
-                        connection.addIncoming(WorkerProblemProtocol.class, defaultWorkerProblemProtocol);
-
-                        if (shouldPublishJvmMemoryInfo) {
-                            connection.useParameterSerializers(WorkerJvmMemoryInfoSerializer.create());
-                            connection.addIncoming(WorkerJvmMemoryInfoProtocol.class, memoryStatus);
-                        }
-                    }
-                });
-            }
-        });
+                if (shouldPublishJvmMemoryInfo) {
+                    connection.useParameterSerializers(WorkerJvmMemoryInfoSerializer.create());
+                    connection.addIncoming(WorkerJvmMemoryInfoProtocol.class, memoryStatus);
+                }
+            }));
         workerProcess.startAccepting(acceptor);
         Address localAddress = acceptor.getAddress();
 
@@ -243,8 +251,14 @@ public class DefaultWorkerProcessBuilder implements WorkerProcessBuilder {
         JavaExecHandleBuilder javaCommand = getJavaCommand();
         javaCommand.setDisplayName(displayName);
 
-        boolean java9Compatible = jvmVersionDetector.getJavaVersion(javaCommand.getExecutable()).isJava9Compatible();
+        int javaVersionMajor = jvmVersionDetector.getJavaVersionMajor(javaCommand.getExecutable());
+
+        boolean java9Compatible = javaVersionMajor >= 9;
         workerImplementationFactory.prepareJavaCommand(id, displayName, this, implementationClassPath, implementationModulePath, localAddress, javaCommand, shouldPublishJvmMemoryInfo, java9Compatible);
+
+        if (addJpmsCompatibilityFlags) {
+            javaCommand.jvmArgs(JpmsConfiguration.forWorkerProcesses(javaVersionMajor, nativeServicesMode.isPotentiallyEnabled()));
+        }
 
         javaCommand.args("'" + displayName + "'");
         if (javaCommand.getMaxHeapSize() == null) {
@@ -285,6 +299,11 @@ public class DefaultWorkerProcessBuilder implements WorkerProcessBuilder {
         }
 
         @Override
+        public Optional<ExecResult> getExecResult() {
+            return delegate.getExecResult();
+        }
+
+        @Override
         public JvmMemoryStatus getJvmMemoryStatus() {
             return delegate.getJvmMemoryStatus();
         }
@@ -292,6 +311,11 @@ public class DefaultWorkerProcessBuilder implements WorkerProcessBuilder {
         @Override
         public void stopNow() {
             delegate.stopNow();
+        }
+
+        @Override
+        public String getDisplayName() {
+            return delegate.getDisplayName();
         }
     }
 

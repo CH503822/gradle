@@ -16,95 +16,100 @@
 
 package org.gradle.api.problems;
 
+import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 
-import javax.annotation.Nullable;
-
 /**
- * {@link Problem} instance builder that is not capable of creating a new instances.
+ * Provides options to configure problems.
  *
- * An example of how to use the builder:
- * <pre>{@code
- *  <problemReporter>.report(configurator -> configurator
- *          .label("test problem")
- *          .category("category", "subcategory")
- *          .severity(Severity.ERROR)
- *          .details("this is a test")
- *  }</pre>
- *
+ * @see ProblemReporter
  * @since 8.6
  */
 @Incubating
 public interface ProblemSpec {
-
     /**
-     * Declares a short message for this problem.
-     * @param label the short message
-     * @param args the arguments for formatting the label with {@link String#format(String, Object...)}
+     * Declares a short, but context-dependent message for this problem.
      *
-     * @return the builder for the next required property
-     * @since 8.6
+     * @param contextualLabel the short message
+     * @return this
+     * @since 8.8
      */
-    ProblemSpec label(String label, Object... args);
+    ProblemSpec contextualLabel(String contextualLabel);
 
     /**
-     * Declares the problem category.
+     * Declares where this problem is documented.
      *
-     * @param category the type name
-     * @param details the type details
-     * @return the builder for the next required property
-     * @since 8.6
-     * @see ProblemCategory
-     */
-    ProblemSpec category(String category, String... details);
-
-    /**
-     * Declares the documentation for this problem.
-     *
-     * @return the builder for the next required property
-     * @since 8.6
-     */
-    ProblemSpec documentedAt(DocLink doc);
-
-    /**
-     * Declares the documentation for this problem.
-     *
-     * @return the builder for the next required property
+     * @return this
      * @since 8.6
      */
     ProblemSpec documentedAt(String url);
 
     /**
-     * Declares that this problem is in a file with optional position and length.
+     * Declares that this problem is in a file.
      *
      * @param path the file location
-     * @param line the line number
-     * @param column the column number
+     * @return this
+     * @since 8.6
+     */
+    ProblemSpec fileLocation(String path);
+
+    /**
+     * Declares that this problem is in a file on a line.
+     *
+     * @param path the file location
+     * @param line the one-indexed line number
+     * @return this
+     * @since 8.6
+     */
+    ProblemSpec lineInFileLocation(String path, int line);
+
+    /**
+     * Declares that this problem is in a file with on a line at a certain position.
+     *
+     * @param path the file location
+     * @param line the one-indexed line number
+     * @param column the one-indexed column
+     * @return this
+     * @since 8.6
+     */
+    ProblemSpec lineInFileLocation(String path, int line, int column);
+
+    /**
+     * Declares that this problem is in a file with on a line at a certain position.
+     *
+     * @param path the file location
+     * @param line the one-indexed line number
+     * @param column the one-indexed column
      * @param length the length of the text
-     * @return the builder for the next required property
+     * @return this
      * @since 8.6
      */
-    ProblemSpec fileLocation(String path, @Nullable Integer line, @Nullable Integer column, @Nullable Integer length);
+    ProblemSpec lineInFileLocation(String path, int line, int column, int length);
 
     /**
-     * Declares that this problem is emitted while applying a plugin.
+     * Declares that this problem is in a file at a certain global position with a given length.
      *
-     * @param pluginId the ID of the applied plugin
-     * @return the builder for the next required property
+     * @param path the file location
+     * @param offset the zero-indexed global offset from the beginning of the file
+     * @param length the length of the text
+     * @return this
      * @since 8.6
      */
-    ProblemSpec pluginLocation(String pluginId);
+    ProblemSpec offsetInFileLocation(String path, int offset, int length);
 
     /**
-     * Declares that this problem should automatically collect the location information based on the current stack trace.
+     * Declares that this problem is at the same place where it's reported. The stack trace will be used to determine the location.
      *
-     * @return the builder for the next required property
+     * @return this
      * @since 8.6
      */
     ProblemSpec stackLocation();
 
     /**
-     * The long description of this problem.
+      Declares a long description detailing the problem.
+     * <p>
+     * Details can elaborate on the problem, and provide more information about the problem.
+     * They can be multiple lines long, but should not detail solutions; for that, use {@link #solution(String)}.
      *
      * @param details the details
      * @return this
@@ -113,7 +118,7 @@ public interface ProblemSpec {
     ProblemSpec details(String details);
 
     /**
-     * The description of how to solve this problem.
+     * Declares solutions and advice that contain context-sensitive data, e.g. the message contains references to variables, locations, etc.
      *
      * @param solution the solution.
      * @return this
@@ -122,24 +127,49 @@ public interface ProblemSpec {
     ProblemSpec solution(String solution);
 
     /**
-     * Specifies arbitrary data associated with this problem.
-     * <p>
-     * The only supported value type is {@link String}. Future Gradle versions may support additional types.
+     * Declares additional data attached to the problem.
+     *
+     * @param type The type of the additional data.
+     * This can be any type that implements {@link AdditionalData} including {@code abstract} classes and interfaces.
+     * This type will be instantiated and provided as an argument for the {@code Action} passed as the second argument.
+     *
+     * <p>The limitations for this type are:</p>
+     * <ul>
+     *  <li>Only {@code get<VALUE>} and {@code set<VALUE>} methods are allowed.
+     *  <li>These are only allowed to use these types:
+     *    <ul>
+     *         <li>{@code String}</li>
+     *         <li>{@code Boolean}</li>
+     *         <li>{@code Character}</li>
+     *         <li>{@code Byte}</li>
+     *         <li>{@code Short}</li>
+     *         <li>{@code Integer}</li>
+     *         <li>{@code Float}</li>
+     *         <li>{@code Long}</li>
+     *         <li>{@code Double}</li>
+     *         <li>{@code BigInteger}</li>
+     *         <li>{@code BigDecimal}</li>
+     *         <li>{@code File}</li>
+     *   </ul>
+     * </ul>
+     *
+     * @param config The configuration action for the additional data.
+     *
+     * @throws IllegalArgumentException if the conditions for the type are not met or if a different type for the same problem id is used.
      *
      * @return this
-     * @throws RuntimeException for null values and for values with unsupported type.
-     * @since 8.6
+     * @since 8.13
      */
-    ProblemSpec additionalData(String key, Object value);
+    <T extends AdditionalData> ProblemSpec additionalData(Class<T> type, Action<? super T> config);
 
     /**
-     * The exception causing this problem.
+     * Declares the exception causing this problem.
      *
-     * @param e the exception.
+     * @param t the exception.
      * @return this
-     * @since 8.6
+     * @since 8.11
      */
-    ProblemSpec withException(RuntimeException e);
+    ProblemSpec withException(Throwable t);
 
     /**
      * Declares the severity of the problem.

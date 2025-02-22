@@ -16,13 +16,12 @@
 
 package org.gradle.language.nativeplatform.internal;
 
-import com.google.common.collect.Lists;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.Action;
 import org.gradle.api.Named;
 import org.gradle.api.attributes.AttributeContainer;
 import org.gradle.api.attributes.Usage;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
+import org.gradle.api.internal.attributes.AttributesFactory;
 import org.gradle.api.internal.component.DefaultSoftwareComponentVariant;
 import org.gradle.api.internal.component.UsageContext;
 import org.gradle.api.model.ObjectFactory;
@@ -38,10 +37,12 @@ import org.gradle.nativeplatform.internal.DefaultTargetMachineFactory;
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -58,7 +59,7 @@ public class Dimensions {
 
     public static String createDimensionSuffix(String dimensionValue, Collection<?> multivalueProperty) {
         if (isDimensionVisible(multivalueProperty)) {
-            return StringUtils.capitalize(dimensionValue.toLowerCase());
+            return StringUtils.capitalize(dimensionValue.toLowerCase(Locale.ROOT));
         }
         return "";
     }
@@ -68,7 +69,7 @@ public class Dimensions {
     }
 
     public static void unitTestVariants(Provider<String> baseName, SetProperty<TargetMachine> declaredTargetMachines, @Nullable SetProperty<TargetMachine> declaredTargetMachinesOfTestedComponent,
-                                        ObjectFactory objectFactory, ImmutableAttributesFactory attributesFactory,
+                                        ObjectFactory objectFactory, AttributesFactory attributesFactory,
                                         Provider<String> group, Provider<String> version,
                                         Action<NativeVariantIdentity> action) {
         Collection<TargetMachine> targetMachines = extractAndValidate("target machine", "unit test", declaredTargetMachines);
@@ -80,7 +81,7 @@ public class Dimensions {
     }
 
     public static void applicationVariants(Provider<String> baseName, SetProperty<TargetMachine> declaredTargetMachines,
-                                       ObjectFactory objectFactory, ImmutableAttributesFactory attributesFactory,
+                                       ObjectFactory objectFactory, AttributesFactory attributesFactory,
                                        Provider<String> group, Provider<String> version,
                                        Action<NativeVariantIdentity> action) {
         Collection<BuildType> buildTypes = BuildType.DEFAULT_BUILD_TYPES;
@@ -89,7 +90,7 @@ public class Dimensions {
     }
 
     public static void libraryVariants(Provider<String> baseName, SetProperty<Linkage> declaredLinkages, SetProperty<TargetMachine> declaredTargetMachines,
-                                           ObjectFactory objectFactory, ImmutableAttributesFactory attributesFactory,
+                                           ObjectFactory objectFactory, AttributesFactory attributesFactory,
                                            Provider<String> group, Provider<String> version,
                                            Action<NativeVariantIdentity> action) {
         Collection<BuildType> buildTypes = BuildType.DEFAULT_BUILD_TYPES;
@@ -120,7 +121,7 @@ public class Dimensions {
     }
 
     private static void variants(Provider<String> baseName, Collection<BuildType> buildTypes, Collection<Linkage> linkages, Collection<TargetMachine> targetMachines,
-                                 ObjectFactory objectFactory, ImmutableAttributesFactory attributesFactory,
+                                 ObjectFactory objectFactory, AttributesFactory attributesFactory,
                                  // TODO: These should come from somewhere else, probably
                                  Provider<String> group, Provider<String> version,
                                  Action<NativeVariantIdentity> action) {
@@ -130,7 +131,7 @@ public class Dimensions {
                     Usage runtimeUsage = objectFactory.named(Usage.class, Usage.NATIVE_RUNTIME);
                     Usage linkUsage = objectFactory.named(Usage.class, Usage.NATIVE_LINK);
 
-                    List<String> variantNameToken = Lists.newArrayList();
+                    List<String> variantNameToken = new ArrayList<>();
                     // FIXME: Always build type name to keep parity with previous Gradle version in tooling API
                     variantNameToken.add(buildType.getName());
                     variantNameToken.add(createDimensionSuffix(linkage, linkages));
@@ -161,7 +162,7 @@ public class Dimensions {
     }
 
     private static void variants(Provider<String> baseName, Collection<BuildType> buildTypes, Collection<TargetMachine> targetMachines,
-                                 ObjectFactory objectFactory, ImmutableAttributesFactory attributesFactory,
+                                 ObjectFactory objectFactory, AttributesFactory attributesFactory,
                                  // TODO: These should come from somewhere else, probably
                                  Provider<String> group, Provider<String> version,
                                  Action<NativeVariantIdentity> action) {
@@ -169,7 +170,7 @@ public class Dimensions {
             for (TargetMachine targetMachine : targetMachines) {
                 Usage runtimeUsage = objectFactory.named(Usage.class, Usage.NATIVE_RUNTIME);
 
-                List<String> variantNameToken = Lists.newArrayList();
+                List<String> variantNameToken = new ArrayList<>();
                 // FIXME: Always build type name to keep parity with previous Gradle version in tooling API
                 variantNameToken.add(buildType.getName());
                 variantNameToken.add(createDimensionSuffix(targetMachine.getOperatingSystemFamily(), targetMachinesToOperatingSystems(targetMachines)));

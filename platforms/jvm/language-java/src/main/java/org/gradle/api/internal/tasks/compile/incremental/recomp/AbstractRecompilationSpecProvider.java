@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.gradle.api.file.FileTree;
@@ -30,7 +31,6 @@ import org.gradle.internal.file.Deleter;
 import org.gradle.work.FileChange;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -119,7 +119,7 @@ abstract class AbstractRecompilationSpecProvider implements RecompilationSpecPro
         }
     }
 
-    private String rebuildClauseForChangedNonSourceFile(FileChange fileChange) {
+    private static String rebuildClauseForChangedNonSourceFile(FileChange fileChange) {
         return String.format("%s '%s' has been %s", "resource", fileChange.getFile().getName(), fileChange.getChangeType().name().toLowerCase(Locale.US));
     }
 
@@ -140,7 +140,7 @@ abstract class AbstractRecompilationSpecProvider implements RecompilationSpecPro
      * <p>
      * We will use name "independent classes" for classes that are in the sources that are passed to a compiler but are not a dependency to a changed class.
      * <p>
-     * Check also: <a href="https://github.com/gradle/gradle/issues/21644" />
+     * Check also: <a href="https://github.com/gradle/gradle/issues/21644">#21644</a>
      */
     private static void collectAllSourcePathsAndIndependentClasses(SourceFileChangeProcessor sourceFileChangeProcessor, RecompilationSpec spec, SourceFileClassNameConverter sourceFileClassNameConverter) {
         Set<String> classesToCompile = new LinkedHashSet<>(spec.getClassesToCompile());
@@ -265,10 +265,12 @@ abstract class AbstractRecompilationSpecProvider implements RecompilationSpecPro
     }
 
     private static void includePreviousCompilationOutputOnClasspath(JavaCompileSpec spec) {
-        List<File> classpath = new ArrayList<>(spec.getCompileClasspath());
+        List<File> originalClasspath = spec.getCompileClasspath();
         File destinationDir = spec.getDestinationDir();
-        classpath.add(destinationDir);
-        spec.setCompileClasspath(classpath);
+        spec.setCompileClasspath(ImmutableList.<File>builderWithExpectedSize(originalClasspath.size() + 1)
+            .add(destinationDir)
+            .addAll(originalClasspath)
+            .build());
     }
 
     @Override

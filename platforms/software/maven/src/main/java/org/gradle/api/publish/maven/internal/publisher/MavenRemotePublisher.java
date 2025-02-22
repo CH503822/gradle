@@ -20,6 +20,7 @@ import org.apache.maven.artifact.repository.metadata.Metadata;
 import org.apache.maven.artifact.repository.metadata.Snapshot;
 import org.apache.maven.artifact.repository.metadata.SnapshotVersion;
 import org.apache.maven.artifact.repository.metadata.Versioning;
+import org.gradle.api.NonNullApi;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.internal.artifacts.repositories.DefaultMavenArtifactRepository;
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport;
@@ -32,13 +33,16 @@ import org.gradle.util.internal.BuildCommencedTimeProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.net.URI;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 import java.util.TimeZone;
 
+@NonNullApi
 public class MavenRemotePublisher extends AbstractMavenPublisher {
     private static final Logger LOGGER = LoggerFactory.getLogger(MavenRemotePublisher.class);
     private final BuildCommencedTimeProvider timeProvider;
@@ -49,11 +53,12 @@ public class MavenRemotePublisher extends AbstractMavenPublisher {
     }
 
     @Override
-    public void publish(MavenNormalizedPublication publication, MavenArtifactRepository artifactRepository) {
+    public void publish(MavenNormalizedPublication publication, @Nullable MavenArtifactRepository artifactRepository) {
+        assert artifactRepository != null;
         URI repositoryUrl = artifactRepository.getUrl();
         LOGGER.info("Publishing to repository '{}' ({})", artifactRepository.getName(), repositoryUrl);
 
-        String protocol = repositoryUrl.getScheme().toLowerCase();
+        String protocol = repositoryUrl.getScheme().toLowerCase(Locale.ROOT);
         DefaultMavenArtifactRepository realRepository = (DefaultMavenArtifactRepository) artifactRepository;
         RepositoryTransport transport = realRepository.getTransport(protocol);
         ExternalResourceRepository repository = transport.getRepository();
@@ -107,11 +112,13 @@ public class MavenRemotePublisher extends AbstractMavenPublisher {
 
         if (existing != null) {
             Metadata recessive = existing.getResult();
-            Versioning versioning = recessive.getVersioning();
-            if (versioning != null) {
-                Snapshot snapshot = versioning.getSnapshot();
-                if (snapshot != null && snapshot.getBuildNumber() > 0) {
-                    return snapshot.getBuildNumber() + 1;
+            if (recessive != null) {
+                Versioning versioning = recessive.getVersioning();
+                if (versioning != null) {
+                    Snapshot snapshot = versioning.getSnapshot();
+                    if (snapshot != null && snapshot.getBuildNumber() > 0) {
+                        return snapshot.getBuildNumber() + 1;
+                    }
                 }
             }
         }

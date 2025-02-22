@@ -16,7 +16,6 @@
 
 package org.gradle.api.internal.attributes;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import org.gradle.api.Action;
@@ -31,12 +30,13 @@ import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.model.internal.type.ModelType;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
-public class DefaultDisambiguationRuleChain<T> implements DisambiguationRuleChain<T>, DisambiguationRule<T> {
-    private final List<Action<? super MultipleCandidatesDetails<T>>> rules = Lists.newArrayList();
+public class DefaultDisambiguationRuleChain<T> implements DisambiguationRuleChain<T> {
+    private final List<Action<? super MultipleCandidatesDetails<T>>> rules = new ArrayList<>();
     private final Instantiator instantiator;
     private final IsolatableFactory isolatableFactory;
 
@@ -69,19 +69,8 @@ public class DefaultDisambiguationRuleChain<T> implements DisambiguationRuleChai
         rules.add(rule);
     }
 
-    @Override
-    public void execute(MultipleCandidatesResult<T> details) {
-        for (Action<? super MultipleCandidatesDetails<T>> rule : rules) {
-            rule.execute(details);
-            if (details.hasResult()) {
-                return;
-            }
-        }
-    }
-
-    @Override
-    public boolean doesSomething() {
-        return !rules.isEmpty();
+    public List<Action<? super MultipleCandidatesDetails<T>>> getRules() {
+        return rules;
     }
 
     private static class ExceptionHandler<T> implements InstantiatingAction.ExceptionHandler<MultipleCandidatesDetails<T>> {

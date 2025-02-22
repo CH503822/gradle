@@ -17,7 +17,6 @@
 package org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.builder;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
@@ -31,8 +30,8 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.conflict
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionDescriptorInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons;
+import org.gradle.api.internal.capabilities.CapabilityInternal;
 import org.gradle.internal.Pair;
-import org.gradle.internal.component.external.model.DefaultImmutableCapability;
 import org.gradle.internal.component.model.ComponentGraphResolveMetadata;
 import org.gradle.internal.component.model.ComponentGraphResolveState;
 import org.gradle.internal.component.model.ComponentGraphSpecificResolveState;
@@ -43,7 +42,9 @@ import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver;
 import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -56,11 +57,10 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
     private final ComponentIdentifier componentIdentifier;
     private final ModuleVersionIdentifier id;
     private final ComponentMetaDataResolver resolver;
-    private final List<NodeState> nodes = Lists.newLinkedList();
+    private final List<NodeState> nodes = new LinkedList<>();
     private final Long resultId;
     private final ModuleResolveState module;
-    private final List<ComponentSelectionDescriptorInternal> selectionCauses = Lists.newArrayList();
-    private final DefaultImmutableCapability implicitCapability;
+    private final List<ComponentSelectionDescriptorInternal> selectionCauses = new ArrayList<>();
     private final int hashCode;
 
     private volatile ComponentGraphResolveState resolveState;
@@ -75,14 +75,13 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
     private boolean root;
     private Pair<Capability, Collection<NodeState>> capabilityReject;
 
-    ComponentState(Long resultId, ModuleResolveState module, ModuleVersionIdentifier id, ComponentIdentifier componentIdentifier, ComponentMetaDataResolver resolver) {
+    ComponentState(long resultId, ModuleResolveState module, ModuleVersionIdentifier id, ComponentIdentifier componentIdentifier, ComponentMetaDataResolver resolver) {
         this.resultId = resultId;
         this.module = module;
         this.id = id;
         this.componentIdentifier = componentIdentifier;
         this.resolver = resolver;
-        this.implicitCapability = DefaultImmutableCapability.defaultCapabilityForComponent(id);
-        this.hashCode = 31 * id.hashCode() ^ resultId.hashCode();
+        this.hashCode = 31 * id.hashCode() ^ Long.hashCode(resultId);
     }
 
     @Override
@@ -96,7 +95,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
     }
 
     @Override
-    public Long getResultId() {
+    public long getResultId() {
         return resultId;
     }
 
@@ -133,7 +132,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         return nodes;
     }
 
-    ModuleResolveState getModule() {
+    public ModuleResolveState getModule() {
         return module;
     }
 
@@ -183,8 +182,8 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
      * Restarts all incoming edges for this component, queuing them up for processing.
      */
     public void restartIncomingEdges(ComponentState selected) {
-        for (NodeState configuration : nodes) {
-            configuration.restart(selected);
+        for (NodeState node : nodes) {
+            node.restart(selected);
         }
     }
 
@@ -237,12 +236,11 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
             for (ComponentState version : module.getAllVersions()) {
                 if (version != this) {
                     ComponentGraphResolveState versionState = version.getResolveStateOrNull();
-                    if (versionState != null) {
-                        ComponentGraphResolveState lenient = versionState.maybeAsLenientPlatform((ModuleComponentIdentifier) componentIdentifier, id);
-                        if (lenient != null) {
-                            setState(lenient, ComponentGraphSpecificResolveState.EMPTY_STATE);
-                            return true;
-                        }
+                    if (versionState instanceof LenientPlatformGraphResolveState) {
+                        LenientPlatformGraphResolveState lenientState = (LenientPlatformGraphResolveState) versionState;
+                        ComponentGraphResolveState withIds = lenientState.copyWithIds((ModuleComponentIdentifier) componentIdentifier, id);
+                        setState(withIds, ComponentGraphSpecificResolveState.EMPTY_STATE);
+                        return true;
                     }
                 }
             }
@@ -256,7 +254,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         this.metadataResolveFailure = null;
     }
 
-    public void addConfiguration(NodeState node) {
+    public void addNode(NodeState node) {
         nodes.add(node);
     }
 
@@ -315,23 +313,13 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
 
     @Override
     public List<ComponentState> getDependents() {
-        List<ComponentState> incoming = Lists.newArrayListWithCapacity(nodes.size());
-        for (NodeState configuration : nodes) {
-            for (EdgeState dependencyEdge : configuration.getIncomingEdges()) {
+        List<ComponentState> incoming = new ArrayList<>(nodes.size());
+        for (NodeState node : nodes) {
+            for (EdgeState dependencyEdge : node.getIncomingEdges()) {
                 incoming.add(dependencyEdge.getFrom().getComponent());
             }
         }
         return incoming;
-    }
-
-    @Override
-    public Collection<? extends ModuleVersionIdentifier> getAllVersions() {
-        Collection<ComponentState> moduleVersions = module.getAllVersions();
-        List<ModuleVersionIdentifier> out = Lists.newArrayListWithCapacity(moduleVersions.size());
-        for (ComponentState moduleVersion : moduleVersions) {
-            out.add(moduleVersion.id);
-        }
-        return out;
     }
 
     public boolean isSelected() {
@@ -451,14 +439,14 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         }
     }
 
-    Capability getImplicitCapability() {
-        return implicitCapability;
+    CapabilityInternal getImplicitCapability() {
+        return resolveState.getDefaultCapability();
     }
 
     @Nullable
     Capability findCapability(String group, String name) {
         if (id.getGroup().equals(group) && id.getName().equals(name)) {
-            return implicitCapability;
+            return getImplicitCapability();
         }
         return null;
     }

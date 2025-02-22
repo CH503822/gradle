@@ -88,6 +88,16 @@ public final class ExecuteWorkBuildOperationType implements BuildOperationType<E
         String getOriginBuildInvocationId();
 
         /**
+         * The build cache key of the work in the origin build invocation.
+         * <p>
+         * Null if {@link #getOriginBuildInvocationId()} is null.
+         *
+         * @since 8.7
+         */
+        @Nullable
+        byte[] getOriginBuildCacheKeyBytes();
+
+        /**
          * If the work was UP_TO_DATE or FROM_CACHE, this will convey the execution time of the work in the build that produced the outputs being reused.
          * Value will be null for any other outcome.
          *
@@ -120,7 +130,7 @@ public final class ExecuteWorkBuildOperationType implements BuildOperationType<E
          * Opaque messages describing why the work was executed.
          * <p>
          * In the order emitted by Gradle.
-         * Null if execution did not get so far as to test “up-to-date-ness”.
+         * Null if execution did not get so far as to test "up-to-date-ness".
          * Empty if tested, but work was considered up to date.
          */
         List<String> getExecutionReasons();

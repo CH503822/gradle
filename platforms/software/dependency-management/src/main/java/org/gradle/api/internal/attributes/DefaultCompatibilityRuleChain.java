@@ -15,7 +15,6 @@
  */
 package org.gradle.api.internal.attributes;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.ActionConfiguration;
 import org.gradle.api.attributes.AttributeCompatibilityRule;
@@ -28,11 +27,12 @@ import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.model.internal.type.ModelType;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-public class DefaultCompatibilityRuleChain<T> implements CompatibilityRuleChain<T>, CompatibilityRule<T> {
-    private final List<Action<? super CompatibilityCheckDetails<T>>> rules = Lists.newArrayList();
+public class DefaultCompatibilityRuleChain<T> implements CompatibilityRuleChain<T> {
+    private final List<Action<? super CompatibilityCheckDetails<T>>> rules = new ArrayList<>();
     private final Instantiator instantiator;
     private final IsolatableFactory isolatableFactory;
 
@@ -65,19 +65,8 @@ public class DefaultCompatibilityRuleChain<T> implements CompatibilityRuleChain<
             instantiator, new ExceptionHandler<>(rule)));
     }
 
-    @Override
-    public void execute(CompatibilityCheckResult<T> result) {
-        for (Action<? super CompatibilityCheckDetails<T>> rule : rules) {
-            rule.execute(result);
-            if (result.hasResult()) {
-                return;
-            }
-        }
-    }
-
-    @Override
-    public boolean doesSomething() {
-        return !rules.isEmpty();
+    public List<Action<? super CompatibilityCheckDetails<T>>> getRules() {
+        return rules;
     }
 
     private static class ExceptionHandler<T> implements InstantiatingAction.ExceptionHandler<CompatibilityCheckDetails<T>> {

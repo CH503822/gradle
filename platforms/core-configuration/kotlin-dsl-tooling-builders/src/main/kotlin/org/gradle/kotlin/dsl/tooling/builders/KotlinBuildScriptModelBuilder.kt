@@ -24,6 +24,7 @@ import org.gradle.api.internal.SettingsInternal
 import org.gradle.api.internal.initialization.ClassLoaderScope
 import org.gradle.api.internal.initialization.ScriptHandlerFactory
 import org.gradle.api.internal.initialization.ScriptHandlerInternal
+import org.gradle.api.internal.initialization.StandaloneDomainObjectContext
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.tasks.SourceSet
@@ -40,10 +41,11 @@ import org.gradle.kotlin.dsl.accessors.ProjectAccessorsClassPathGenerator
 import org.gradle.kotlin.dsl.accessors.Stage1BlocksAccessorClassPathGenerator
 import org.gradle.kotlin.dsl.execution.EvalOption
 import org.gradle.kotlin.dsl.precompile.PrecompiledScriptDependenciesResolver
+import org.gradle.kotlin.dsl.precompile.PrecompiledScriptDependenciesResolver.EnvironmentProperties.kotlinDslPluginSpecBuildersImplicitImports
 import org.gradle.kotlin.dsl.provider.ClassPathModeExceptionCollector
 import org.gradle.kotlin.dsl.provider.KotlinScriptClassPathProvider
 import org.gradle.kotlin.dsl.provider.KotlinScriptEvaluator
-import org.gradle.kotlin.dsl.provider.ignoringErrors
+import org.gradle.kotlin.dsl.provider.runCatching
 import org.gradle.kotlin.dsl.resolver.EditorReports
 import org.gradle.kotlin.dsl.resolver.SourceDistributionResolver
 import org.gradle.kotlin.dsl.resolver.SourcePathProvider
@@ -217,6 +219,10 @@ fun precompiledScriptPluginModelBuilder(
             implicitImportsFrom(
                 resolve("accessors").resolve(hashOf(scriptFile))
             ) + implicitImportsFrom(
+                resolve("plugin-spec-builders").resolve(kotlinDslPluginSpecBuildersImplicitImports)
+            ) + implicitImportsFrom(
+                // Gradle <= 8.12 was using this other name with a dash but this was incompatible with moving to kotlin-scripting-host API
+                // Keeping it for compatibility with previous Gradle versions
                 resolve("plugin-spec-builders").resolve("implicit-imports")
             )
         }
@@ -247,15 +253,28 @@ fun projectScriptModelBuilder(
     scriptFile = scriptFile,
     project = project,
     scriptClassPath = project.scriptCompilationClassPath,
-    accessorsClassPath = { classPath ->
-        val stage1BlocksAccessorClassPathGenerator = project.serviceOf<Stage1BlocksAccessorClassPathGenerator>()
-        val projectAccessorClassPathGenerator = project.serviceOf<ProjectAccessorsClassPathGenerator>()
-        val dependenciesAccessors = project.serviceOf<DependenciesAccessors>()
-        projectAccessorClassPathGenerator.projectAccessorsClassPath(project, classPath) + stage1BlocksAccessorClassPathGenerator.stage1BlocksAccessorClassPath(project) + AccessorsClassPath(dependenciesAccessors.classes, dependenciesAccessors.sources)
-    },
+    accessorsClassPath = { project.accessorsClassPathOf(it) },
     sourceLookupScriptHandlers = sourceLookupScriptHandlersFor(project),
     enclosingScriptProjectDir = project.projectDir
 )
+
+
+internal
+fun ProjectInternal.accessorsClassPathOf(classPath: ClassPath): AccessorsClassPath {
+    val stage1BlocksAccessorClassPathGenerator = serviceOf<Stage1BlocksAccessorClassPathGenerator>()
+    val projectAccessorClassPathGenerator = serviceOf<ProjectAccessorsClassPathGenerator>()
+    val dependenciesAccessors = serviceOf<DependenciesAccessors>()
+    return (projectAccessorClassPathGenerator.projectAccessorsClassPath(this, classPath)
+        + stage1BlocksAccessorClassPathGenerator.stage1BlocksAccessorClassPath(this)
+        + AccessorsClassPath(dependenciesAccessors.classes, dependenciesAccessors.sources))
+}
+
+
+internal
+fun SettingsInternal.accessorsClassPathOf(classPath: ClassPath): AccessorsClassPath {
+    val projectAccessorClassPathGenerator = serviceOf<ProjectAccessorsClassPathGenerator>()
+    return projectAccessorClassPathGenerator.projectAccessorsClassPath(this, classPath)
+}
 
 
 private
@@ -286,6 +305,7 @@ fun settingsScriptModelBuilder(scriptFile: File, project: Project) = project.run
         scriptFile = scriptFile,
         project = project,
         scriptClassPath = settings.scriptCompilationClassPath,
+        accessorsClassPath = { settings.accessorsClassPathOf(it) },
         sourceLookupScriptHandlers = listOf(settings.buildscript),
         enclosingScriptProjectDir = rootDir
     )
@@ -334,7 +354,7 @@ fun projectScriptPluginModelBuilder(scriptFile: File, project: ProjectInternal) 
 }
 
 
-private
+internal
 fun compilationClassPathForScriptPluginOf(
     target: Any,
     scriptFile: File,
@@ -346,7 +366,7 @@ fun compilationClassPathForScriptPluginOf(
 
     val scriptSource = textResourceScriptSource(resourceDescription, scriptFile, project.serviceOf())
     val scriptScope = baseScope.createChild("model-${scriptFile.toURI()}", null)
-    val scriptHandler = scriptHandlerFactory.create(scriptSource, scriptScope)
+    val scriptHandler = scriptHandlerFactory.create(scriptSource, scriptScope, StandaloneDomainObjectContext.forScript(scriptSource))
 
     kotlinScriptFactoryOf(project).evaluate(
         target = target,
@@ -372,7 +392,7 @@ fun scriptHandlerFactoryOf(project: ProjectInternal) =
     project.serviceOf<ScriptHandlerFactory>()
 
 
-private
+internal
 fun scriptHandlerFactoryOf(gradle: Gradle) =
     gradle.serviceOf<ScriptHandlerFactory>()
 
@@ -402,12 +422,12 @@ data class KotlinScriptTargetModelBuilder(
         val classpathSources = sourcePathFor(sourceLookupScriptHandlers)
         val classPathModeExceptionCollector = project.serviceOf<ClassPathModeExceptionCollector>()
         val accessorsClassPath =
-            classPathModeExceptionCollector.ignoringErrors {
+            classPathModeExceptionCollector.runCatching {
                 accessorsClassPath(scriptClassPath)
             } ?: AccessorsClassPath.empty
 
         val additionalImports =
-            classPathModeExceptionCollector.ignoringErrors {
+            classPathModeExceptionCollector.runCatching {
                 additionalImports()
             } ?: emptyList()
 
@@ -415,7 +435,7 @@ data class KotlinScriptTargetModelBuilder(
         return StandardKotlinBuildScriptModel(
             (scriptClassPath + accessorsClassPath.bin).asFiles,
             (gradleSource() + classpathSources + accessorsClassPath.src).asFiles,
-            implicitImports + additionalImports,
+            project.scriptImplicitImports + additionalImports,
             buildEditorReportsFor(exceptions),
             getExceptionsForFile(exceptions, this.scriptFile),
             enclosingScriptProjectDir
@@ -436,19 +456,10 @@ data class KotlinScriptTargetModelBuilder(
         SourcePathProvider.sourcePathFor(
             scriptClassPath,
             scriptFile,
-            rootDir,
-            gradleHomeDir,
+            project.rootDir,
+            project.gradle.gradleHomeDir,
             SourceDistributionResolver(project)
         )
-
-    val gradleHomeDir
-        get() = project.gradle.gradleHomeDir
-
-    val rootDir
-        get() = project.rootDir
-
-    val implicitImports
-        get() = project.scriptImplicitImports
 
     private
     fun buildEditorReportsFor(exceptions: List<Exception>) =
@@ -464,7 +475,7 @@ data class KotlinScriptTargetModelBuilder(
 }
 
 
-private
+internal
 val Settings.scriptCompilationClassPath
     get() = serviceOf<KotlinScriptClassPathProvider>().safeCompilationClassPathOf(classLoaderScope, false) {
         (this as SettingsInternal).gradle
@@ -476,12 +487,12 @@ val Settings.classLoaderScope
     get() = (this as SettingsInternal).classLoaderScope
 
 
-private
+internal
 val Project.settings
     get() = (gradle as GradleInternal).settings
 
 
-private
+internal
 val Project.scriptCompilationClassPath
     get() = compilationClassPathOf((this as ProjectInternal).classLoaderScope)
 
@@ -508,7 +519,7 @@ inline fun KotlinScriptClassPathProvider.safeCompilationClassPathOf(
 }
 
 
-private
+internal
 val Project.scriptImplicitImports
     get() = serviceOf<ImplicitImports>().list
 

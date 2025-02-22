@@ -16,9 +16,9 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.builder;
 
-import com.google.common.collect.Lists;
 import org.gradle.api.artifacts.ModuleIdentifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
 class DefaultPendingDependenciesVisitor implements PendingDependenciesVisitor {
@@ -31,7 +31,7 @@ class DefaultPendingDependenciesVisitor implements PendingDependenciesVisitor {
     }
 
     @Override
-    public PendingState maybeAddAsPendingDependency(NodeState node, DependencyState dependencyState) {
+    public PendingState maybeAddAsPendingDependency(NodeState sourceNode, DependencyState dependencyState) {
         ModuleIdentifier key = dependencyState.getModuleIdentifier();
         boolean isConstraint = dependencyState.getDependency().isConstraint();
         if (!isConstraint) {
@@ -52,7 +52,7 @@ class DefaultPendingDependenciesVisitor implements PendingDependenciesVisitor {
         }
 
         // No hard dependency, queue up pending dependency in case we see a hard dependency later.
-        module.registerConstraintProvider(node);
+        module.registerConstraintProvider(sourceNode);
         return PendingState.PENDING;
     }
 
@@ -65,7 +65,7 @@ class DefaultPendingDependenciesVisitor implements PendingDependenciesVisitor {
         boolean activatedPending = false;
         if (pendingDependencies.hasConstraintProviders()) {
             if (noLongerPending == null) {
-                noLongerPending = Lists.newArrayList();
+                noLongerPending = new ArrayList<>();
             }
             noLongerPending.add(pendingDependencies);
             activatedPending = pendingDependencies.shouldReportActivatePending();
